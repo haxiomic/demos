@@ -186,7 +186,6 @@ snow_App.prototype = {
 	,__class__: snow_App
 };
 var Main = function() {
-	this.timeStart = 0;
 	snow_App.call(this);
 };
 $hxClasses["Main"] = Main;
@@ -197,232 +196,15 @@ Main.prototype = $extend(snow_App.prototype,{
 		config.web.no_context_menu = false;
 		config.window.borderless = true;
 		config.window.fullscreen = true;
-		config.window.title = "Volume Render";
+		config.window.title = "Voxel Render";
 		config.render.antialiasing = 0;
 		return config;
 	}
 	,ready: function() {
-		var _g = this;
-		this.timeStart = haxe_Timer.stamp();
-		snow_system_assets_AssetBytes.load(this.app.assets,"assets/dragon-filled.vox").then(function(data) {
-			var vox = VoxReader.read(snow_api_buffers__$Uint8Array_Uint8Array_$Impl_$.toBytes(data.bytes));
-			haxe_Log.trace("loaded vox, size: " + Std.string(vox.size),{ fileName : "Main.hx", lineNumber : 51, className : "Main", methodName : "ready"});
-			var sliceTex = _g.createSliceTexture(vox,1,{ },1024,false);
-			_g.setSliceTex(_g.displayShader,sliceTex);
-		});
-		this.illuminationShader = new IlluminationShader();
-		this.illuminationShader.iResolution.data.x = this.app.window.width;
-		this.illuminationShader.iResolution.data.y = this.app.window.height;
-		this.renderQuad = gltoolbox_GeometryTools.createQuad(-1,-1,2,2,5);
-		this.displayShader = new VolumeShader();
-		this.displayShader.iResolution.data.x = this.app.window.width;
-		this.displayShader.iResolution.data.y = this.app.window.height;
-		this.displayShader.iGlobalTime.data = 0;
+		var shader = new TestShader();
 		this.app.window.onrender = $bind(this,this.render);
-		this.app.window.onevent = $bind(this,this.onWindowEvent);
-	}
-	,renderOcclusion: function(st) {
-		this.illuminationShader.lightPos.data.x = 1.0;
-		this.illuminationShader.lightPos.data.y = 1.0;
-		this.illuminationShader.lightPos.data.z = 1.0;
-		this.illuminationShader.lightCol.data.x = 1.0;
-		this.illuminationShader.lightPos.data.y = 0.2;
-		this.illuminationShader.lightPos.data.z = 0.4;
-		return null;
-	}
-	,setSliceTex: function(shader,sliceTex) {
-		shader.voxelSlices.data = sliceTex.texture;
-		var info = sliceTex.info;
-		shader.voxelSliceInfo.data.x = info.sliceW / info.textureW;
-		shader.voxelSliceInfo.data.y = info.sliceH / info.textureH;
-		shader.voxelSliceInfo.data.z = sliceTex.info.nSlicesPerRow;
-		shader.voxelSliceInfo.data.w = sliceTex.info.nSlices;
-		shader.voxelResolution.data.x = info.sliceW;
-		shader.voxelResolution.data.y = info.sliceH;
-		shader.voxelResolution.data.z = info.sliceD;
-	}
-	,createSliceTexture: function(vox,axis,params,maxW,POT) {
-		if(POT == null) POT = true;
-		if(maxW == null) maxW = 4096;
-		if(axis == null) axis = 0;
-		if(params == null) params = { };
-		var defaultParams = { channelType : 6408, dataType : 5121, filter : 9729, wrapS : 33071, wrapT : 33071, unpackAlignment : gltoolbox_TextureTools.defaultParams.unpackAlignment};
-		var _g = 0;
-		var _g1 = Reflect.fields(defaultParams);
-		while(_g < _g1.length) {
-			var f = _g1[_g];
-			++_g;
-			if(!Object.prototype.hasOwnProperty.call(params,f)) Reflect.setField(params,f,Reflect.field(defaultParams,f));
-		}
-		axis = Math.floor(Math.min(3,Math.max(0,axis)));
-		if(maxW == null) maxW = snow_modules_opengl_web_GL.getParameter(3379); else maxW = Math.floor(Math.min(maxW,snow_modules_opengl_web_GL.getParameter(3379)));
-		var nSlices = 0;
-		var sliceW = 0;
-		var sliceH = 0;
-		switch(axis) {
-		case 0:
-			nSlices = vox.size.x;
-			sliceW = vox.size.z;
-			sliceH = vox.size.y;
-			break;
-		case 1:
-			nSlices = vox.size.y;
-			sliceW = vox.size.x;
-			sliceH = vox.size.z;
-			break;
-		case 2:
-			nSlices = vox.size.z;
-			sliceW = vox.size.x;
-			sliceH = vox.size.y;
-			break;
-		}
-		var nCols = Math.floor(maxW / sliceW);
-		var nRows = Math.ceil(nSlices / nCols);
-		if(nRows <= 1) nCols = nSlices;
-		var width = nCols * sliceW;
-		var height = nRows * sliceH;
-		var textureWidth;
-		if(POT) textureWidth = gltoolbox_MathTools.upperPowerOf2(width); else textureWidth = width;
-		var textureHeight;
-		if(POT) textureHeight = gltoolbox_MathTools.upperPowerOf2(height); else textureHeight = height;
-		var texture = gltoolbox_TextureTools.createTexture(textureWidth,textureHeight,params);
-		var nChannels;
-		var _g2 = params.channelType;
-		if(_g2 != null) switch(_g2) {
-		case 6408:
-			nChannels = 4;
-			break;
-		case 6407:
-			nChannels = 3;
-			break;
-		case 6406:
-			nChannels = 1;
-			break;
-		case 6409:
-			nChannels = 1;
-			break;
-		case 6410:
-			nChannels = 2;
-			break;
-		default:
-			nChannels = 4;
-		} else nChannels = 4;
-		var pixelData = [];
-		var _g11 = 0;
-		var _g3 = textureWidth * textureHeight * nChannels;
-		while(_g11 < _g3) {
-			var i1 = _g11++;
-			pixelData[i1] = 0;
-		}
-		var col;
-		var getColorArray = function(v) {
-			col = vox.palette[v.colorIndex - 1];
-			var reducedAlpha = Math.round(col.a * 0.1);
-			return [col.r,col.g,col.b,reducedAlpha];
-		};
-		var offsetX;
-		var offsetY;
-		var px;
-		var py;
-		var i;
-		switch(axis) {
-		case 0:
-			var _g4 = 0;
-			var _g12 = vox.voxels;
-			while(_g4 < _g12.length) {
-				var v1 = _g12[_g4];
-				++_g4;
-				offsetX = v1.x % nCols * sliceW;
-				offsetY = Math.floor(v1.x / nCols) * sliceH;
-				px = v1.z + offsetX;
-				py = v1.y + offsetY;
-				var data = getColorArray(v1);
-				var i2 = (py * textureWidth + px) * nChannels;
-				var j = 0;
-				while(j < nChannels) {
-					pixelData[i2 + j] = data[j];
-					j++;
-				}
-			}
-			break;
-		case 1:
-			var _g5 = 0;
-			var _g13 = vox.voxels;
-			while(_g5 < _g13.length) {
-				var v2 = _g13[_g5];
-				++_g5;
-				offsetX = v2.y % nCols * sliceW;
-				offsetY = Math.floor(v2.y / nCols) * sliceH;
-				px = v2.x + offsetX;
-				py = v2.z + offsetY;
-				var data1 = getColorArray(v2);
-				var i3 = (py * textureWidth + px) * nChannels;
-				var j1 = 0;
-				while(j1 < nChannels) {
-					pixelData[i3 + j1] = data1[j1];
-					j1++;
-				}
-			}
-			break;
-		case 2:
-			var _g6 = 0;
-			var _g14 = vox.voxels;
-			while(_g6 < _g14.length) {
-				var v3 = _g14[_g6];
-				++_g6;
-				offsetX = v3.z % nCols * sliceW;
-				offsetY = Math.floor(v3.z / nCols) * sliceH;
-				px = v3.x + offsetX;
-				py = v3.y + offsetY;
-				var data2 = getColorArray(v3);
-				var i4 = (py * textureWidth + px) * nChannels;
-				var j2 = 0;
-				while(j2 < nChannels) {
-					pixelData[i4 + j2] = data2[j2];
-					j2++;
-				}
-			}
-			break;
-		}
-		snow_modules_opengl_web_GL.bindTexture(3553,texture);
-		snow_modules_opengl_web_GL.texImage2D(3553,0,params.channelType,textureWidth,textureHeight,0,params.channelType,params.dataType,(function($this) {
-			var $r;
-			var len = null;
-			var this1;
-			if(pixelData != null) this1 = new Uint8Array(pixelData); else this1 = null;
-			$r = this1;
-			return $r;
-		}(this)));
-		snow_modules_opengl_web_GL.bindTexture(3553,null);
-		var info = { sliceW : sliceW, sliceH : sliceH, sliceD : nSlices, nSlicesPerRow : nCols, nSlices : nSlices, textureW : textureWidth, textureH : textureHeight};
-		return { texture : texture, info : info};
 	}
 	,render: function(w) {
-		snow_modules_opengl_web_GL.bindBuffer(34962,this.renderQuad);
-		snow_modules_opengl_web_GL.clearColor(0,0,0,1);
-		snow_modules_opengl_web_GL.clear(16384);
-		snow_modules_opengl_web_GL.bindFramebuffer(36160,null);
-		snow_modules_opengl_web_GL.viewport(0,0,w.width,w.height);
-		this.displayShader.iGlobalTime.data = haxe_Timer.stamp() - this.timeStart;
-		this.displayShader.activate(true,true);
-		snow_modules_opengl_web_GL.drawArrays(5,0,4);
-		this.displayShader.deactivate();
-	}
-	,onmousemove: function(x,y,xrel,yrel,_,_1) {
-		this.displayShader.iMouse.data.x = x;
-		this.displayShader.iMouse.data.y = y;
-		this.displayShader.iMouse.data.z = 1;
-	}
-	,onWindowEvent: function(e) {
-		var _g = e.type;
-		if(_g != null) switch(_g) {
-		case 6:
-			this.displayShader.iResolution.data.x = this.app.window.width;
-			this.displayShader.iResolution.data.y = this.app.window.height;
-			break;
-		default:
-		} else {
-		}
 	}
 	,__class__: Main
 });
@@ -594,122 +376,25 @@ shaderblox_ShaderBase.prototype = {
 	}
 	,__class__: shaderblox_ShaderBase
 };
-var VolumeShader = function() {
+var TestShader = function() {
 	shaderblox_ShaderBase.call(this);
 };
-$hxClasses["VolumeShader"] = VolumeShader;
-VolumeShader.__name__ = ["VolumeShader"];
-VolumeShader.__super__ = shaderblox_ShaderBase;
-VolumeShader.prototype = $extend(shaderblox_ShaderBase.prototype,{
+$hxClasses["TestShader"] = TestShader;
+TestShader.__name__ = ["TestShader"];
+TestShader.__super__ = shaderblox_ShaderBase;
+TestShader.prototype = $extend(shaderblox_ShaderBase.prototype,{
 	createProperties: function() {
 		shaderblox_ShaderBase.prototype.createProperties.call(this);
-		var instance = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UFloat"),["iGlobalTime",-1]);
-		this.iGlobalTime = instance;
-		this._uniforms.push(instance);
-		var instance1 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec2"),["iResolution",-1]);
-		this.iResolution = instance1;
-		this._uniforms.push(instance1);
-		var instance2 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["iMouse",-1]);
-		this.iMouse = instance2;
-		this._uniforms.push(instance2);
-		var instance3 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UTexture"),["voxelSlices",-1,false]);
-		this.voxelSlices = instance3;
-		this._uniforms.push(instance3);
-		var instance4 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec4"),["voxelSliceInfo",-1]);
-		this.voxelSliceInfo = instance4;
-		this._uniforms.push(instance4);
-		var instance5 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["voxelResolution",-1]);
-		this.voxelResolution = instance5;
-		this._uniforms.push(instance5);
-		var instance6 = Type.createInstance(Type.resolveClass("shaderblox.attributes.FloatAttribute"),["vertex",0,2]);
-		this.vertex = instance6;
-		this._attributes.push(instance6);
+		var instance = Type.createInstance(Type.resolveClass("shaderblox.attributes.FloatAttribute"),["vertexPosition",0,2]);
+		this.vertexPosition = instance;
+		this._attributes.push(instance);
 		this._aStride += 8;
 	}
 	,initSources: function() {
-		this._vertSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nattribute vec2 vertex;\nvarying vec2 p;\n\nvoid main(){\n\tp = vertex * .5 + vec2(0.5, 0.5);\n\tgl_Position = vec4(vertex, 0.0, 1.0 );\n}\n\n";
-		this._fragSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nuniform float iGlobalTime;\nuniform vec2 iResolution;\nuniform vec3 iMouse;\nvec3 mapTo3D(in vec2 p, in vec4 sliceInfo){\n\tfloat col = floor(p.x / sliceInfo.x);\n\tfloat row = floor(p.y / sliceInfo.y);\n\tfloat sliceIndex = row * sliceInfo.z + col;\n\n\treturn vec3(fract(p.xy / sliceInfo.xy), sliceIndex / sliceInfo.w);\n}\n\nvec2 mapTo2D(in vec3 p, in vec4 sliceInfo){\n\tfloat sliceIndex = floor(p.z * sliceInfo.w);\n\tfloat sliceRow = floor(sliceIndex / sliceInfo.z);\n\tfloat sliceCol = sliceIndex - sliceInfo.z * sliceRow;\n\t\n\treturn (p.xy + vec2(sliceCol, sliceRow)) * sliceInfo.xy;\n}\n\n\nvec4 sample3DTexture(sampler2D slices, in vec3 p, in vec4 sliceInfo, in float bias){\n\tif(any(greaterThan(p, vec3(1.0))) || any(lessThan(p, vec3(0.0))))\n\t\treturn vec4(0);\n\n\treturn texture2D(slices, mapTo2D(p, sliceInfo), bias);\n}\n\nvec4 sample3DTexture(sampler2D slices, in vec3 p, in vec4 sliceInfo){\n\treturn sample3DTexture(slices, p, sliceInfo, 0.0);\n}\nfloat rand(vec2 co){\n    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);\n}\n\nfloat iSphere(in vec3 ro, in vec3 rd, in vec4 sph){\n\t\n\t\n\t\n\t\n\tvec3 oc = ro - sph.xyz; \n\t\n\tfloat b = dot(oc, rd);\n\tfloat c = dot(oc, oc) - sph.w * sph.w; \n\tfloat h = b*b - c; \n\tif(h < 0.0) \n\t\treturn -1.0;\n\tfloat t = (-b - sqrt(h)); \n\n\treturn t;\n}\n\nuniform sampler2D voxelSlices;\nuniform vec4 voxelSliceInfo;\nuniform vec3 voxelResolution;\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nfloat expRadius = 1.0;\nvec3 expCenter = vec3(0.,0.0,0.);\n\n\nvec3 computeColour( float density, float radius ){\n\t\n\t\n\t\n\t\n\tvec3 result = mix( 1.1*vec3(1.0,0.9,0.8), vec3(0.4,0.15,0.1), density );\n\t\n\t\n\tvec3 colBottom = 3.1*vec3(1.0,0.5,0.05);\n\tvec3 colTop = 2.*vec3(0.48,0.53,0.5);\n\tresult *= mix( colBottom, colTop, min( (radius+.5)/1.7, 1.0 ) );\n\t\n\treturn result;\n}\n\n\nfloat densityFn( in vec3 p, in float r, out float rawDens, in float rayAlpha ){\n    float den;\n    rawDens = sin(p.x*10.0)*1.0*sin(p.y*10.)*sin(p.z*10.);\n\t\n    den = clamp( rawDens, 0.0, 1.0 );\n    \n\t\n\t\n\tden *= 1.-smoothstep(0.8,1.,r/expRadius);\n\t\n\t#ifdef CROSS_SECTION\n\tden *= smoothstep(.0,.1,-p.x);\n\t#endif\n\t\n\treturn den;\n}\n\nvec4 raymarch( in vec3 rayo, in vec3 rayd, in float expInter ){\n    vec4 sum = vec4( 0.0 );\n     \n    float step = 0.015;\n\n    \n    float dither = rand(rayo.xy*expInter)*(step);\n\tvec3 pos = rayo + rayd * (expInter + dither);\n\n\t\n\tfloat rx = voxelResolution.y/voxelResolution.x;\n\tfloat rz = voxelResolution.y/voxelResolution.z;\n\n\tfloat scale = 1.0;\n\tfloat rScale = 1./scale;\n\n\tvec3 offset = -vec3(.5 * (1. - rx*rScale), .5 * (1. - 1.0*rScale), .5 * (1. - rz*rScale));\n\t\n    for( int i=0; i<200; i++ )\n    {\t\t\n\t\tfloat radiusFromExpCenter = length(pos - expCenter);\n\t\tif( radiusFromExpCenter > expRadius+0.01 ) break;\n\t\t\t\n\t\t\n\t\t\n\t\t\n\n\t\t\n\t\tvec3 texP = pos + vec3(.5);\n\t\ttexP.x *= rx;\n\t\ttexP.z *= rz;\n\n\t\ttexP *= 1.*rScale;\n\t\ttexP -= offset;\n\n\t\tvec4 col = sample3DTexture(voxelSlices, texP, voxelSliceInfo, 0.0);\n\t\t\n\t\t\n\t\tcol.rgb *= col.a;\n\t\t\n\t\t\n\t\t\n\t\t\n\t\tsum = sum + col*(1.0 - sum.a);\n\t\t\n        if( sum.a > 0.99 ) break;\n\t\t\n\t\t\n\t\t\n\t\tfloat stepMult = 1.0;\n\t\t\n\t\t\n\t\tpos += rayd * step * stepMult;\n    }\n\t\n    return clamp( sum, 0.0, 1.0 );\n}\n\n\nvec3 computePixelRay( in vec2 p, out vec3 cameraPos ){\n    \n\t\n    float camRadius = 3.0;\n\t\n\tfloat a = iGlobalTime*20.;\n\tif( iMouse.z > 0. )\n\t\ta = iMouse.x;\n\tfloat theta = -(a-iResolution.x)/80.;\n    float xoff = camRadius * cos(theta);\n    float zoff = camRadius * sin(theta);\n    cameraPos = vec3(xoff,expCenter.y,zoff);\n     \n    \n    vec3 target = vec3(0.,expCenter.y,0.);\n     \n    \n    vec3 fo = normalize(target-cameraPos);\n    vec3 ri = normalize(vec3(fo.z, 0., -fo.x ));\n    vec3 up = normalize(cross(fo,ri));\n     \n    \n    float fov = .5;\n\t\n    \n    vec3 rayDir = normalize(fo + fov*p.x*ri + fov*p.y*up);\n\t\n\treturn rayDir;\n}\n\nvoid mainImage( out vec4 fragColor, in vec2 fragCoord ){\n\t\n    vec2 q = fragCoord.xy / iResolution.xy;\n    vec2 p = -1.0 + 2.0*q;\n    p.x *= iResolution.x / iResolution.y;\n    \n\tvec3 rayDir, cameraPos;\n\t\n    rayDir = computePixelRay( p, cameraPos );\n\t\n\tvec4 col = vec4(0.);\n\t\n    \n\tfloat boundingSphereInter = iSphere( cameraPos, rayDir, vec4(expCenter,expRadius) );\n\tif( boundingSphereInter > 0. )\n\t{\n\t\t\n\t    col = raymarch( cameraPos, rayDir, boundingSphereInter);\n\t}\n\t\n    \n    fragColor = col;\n}\n\nvoid main(){\n\tmainImage(gl_FragColor, gl_FragCoord.xy);\n}\n";
+		this._vertSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nattribute vec2 vertexPosition;\nvarying vec2 texelCoord;\nvoid main() {\n\ttexelCoord = vertexPosition;\n\tgl_Position = vec4(vertexPosition*2.0 - vec2(1.0, 1.0), 0.0, 1.0 );\n}\n";
+		this._fragSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nvarying vec2 texelCoord;\nvoid main(void){\n\tgl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n}\n";
 	}
-	,__class__: VolumeShader
-});
-var IlluminationShader = function() {
-	shaderblox_ShaderBase.call(this);
-};
-$hxClasses["IlluminationShader"] = IlluminationShader;
-IlluminationShader.__name__ = ["IlluminationShader"];
-IlluminationShader.__super__ = shaderblox_ShaderBase;
-IlluminationShader.prototype = $extend(shaderblox_ShaderBase.prototype,{
-	createProperties: function() {
-		shaderblox_ShaderBase.prototype.createProperties.call(this);
-		var instance = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UFloat"),["iGlobalTime",-1]);
-		this.iGlobalTime = instance;
-		this._uniforms.push(instance);
-		var instance1 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec2"),["iResolution",-1]);
-		this.iResolution = instance1;
-		this._uniforms.push(instance1);
-		var instance2 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["iMouse",-1]);
-		this.iMouse = instance2;
-		this._uniforms.push(instance2);
-		var instance3 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UTexture"),["voxelSlices",-1,false]);
-		this.voxelSlices = instance3;
-		this._uniforms.push(instance3);
-		var instance4 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec4"),["voxelSliceInfo",-1]);
-		this.voxelSliceInfo = instance4;
-		this._uniforms.push(instance4);
-		var instance5 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["voxelResolution",-1]);
-		this.voxelResolution = instance5;
-		this._uniforms.push(instance5);
-		var instance6 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["lightPos",-1]);
-		this.lightPos = instance6;
-		this._uniforms.push(instance6);
-		var instance7 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["lightCol",-1]);
-		this.lightCol = instance7;
-		this._uniforms.push(instance7);
-		var instance8 = Type.createInstance(Type.resolveClass("shaderblox.attributes.FloatAttribute"),["vertex",0,2]);
-		this.vertex = instance8;
-		this._attributes.push(instance8);
-		this._aStride += 8;
-	}
-	,initSources: function() {
-		this._vertSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nattribute vec2 vertex;\nvarying vec2 p;\n\nvoid main(){\n\tp = vertex * .5 + vec2(0.5, 0.5);\n\tgl_Position = vec4(vertex, 0.0, 1.0 );\n}\n\n";
-		this._fragSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nuniform float iGlobalTime;\nuniform vec2 iResolution;\nuniform vec3 iMouse;\nvec3 mapTo3D(in vec2 p, in vec4 sliceInfo){\n\tfloat col = floor(p.x / sliceInfo.x);\n\tfloat row = floor(p.y / sliceInfo.y);\n\tfloat sliceIndex = row * sliceInfo.z + col;\n\n\treturn vec3(fract(p.xy / sliceInfo.xy), sliceIndex / sliceInfo.w);\n}\n\nvec2 mapTo2D(in vec3 p, in vec4 sliceInfo){\n\tfloat sliceIndex = floor(p.z * sliceInfo.w);\n\tfloat sliceRow = floor(sliceIndex / sliceInfo.z);\n\tfloat sliceCol = sliceIndex - sliceInfo.z * sliceRow;\n\t\n\treturn (p.xy + vec2(sliceCol, sliceRow)) * sliceInfo.xy;\n}\n\n\nvec4 sample3DTexture(sampler2D slices, in vec3 p, in vec4 sliceInfo, in float bias){\n\tif(any(greaterThan(p, vec3(1.0))) || any(lessThan(p, vec3(0.0))))\n\t\treturn vec4(0);\n\n\treturn texture2D(slices, mapTo2D(p, sliceInfo), bias);\n}\n\nvec4 sample3DTexture(sampler2D slices, in vec3 p, in vec4 sliceInfo){\n\treturn sample3DTexture(slices, p, sliceInfo, 0.0);\n}\nfloat rand(vec2 co){\n    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);\n}\n\nuniform sampler2D voxelSlices;\nuniform vec4 voxelSliceInfo;\nuniform vec3 voxelResolution;\n\nuniform vec3 lightPos;\nuniform vec3 lightCol;\n\nvarying vec2 p;\n\n\n\n\n\n\n\n#define MAX_STEPS 2000\n\nvec4 raymarch(in vec3 rayo, in vec3 rayd){\n    vec4 sum = vec4(0.0);\n     \n    float stepLen = 0.015;\n\n\tvec3 pos = rayo;\n    \n    \n\n\tfloat maxLen = distance(rayo, rayd);\n\tfloat totalLen = 0.;\n\tvec3 stepVec = rayd * stepLen;\n\n    for(int i=0; i < MAX_STEPS; i++){\n\t\tvec4 col = sample3DTexture(voxelSlices, pos, voxelSliceInfo, 0.0);\n\t\t\n\t\t\n\t\t\n\t\tsum += col * stepLen; \n        if(sum.a > 0.99) break; \n\t\t\n\t\t\n\t\ttotalLen += stepLen;\n\t\tpos += stepVec;\n\n\t\tif(totalLen > maxLen) break;\n    }\n\n    \n    \n\t\n    return clamp(sum, 0.0, 1.0);\n}\n\nvoid main(){\n\t\n\tvec3 lightPos = vec3(sin(iGlobalTime), 1.0, 1.0);\n\tvec4 lightIntensity = vec4(1.);\n\tvec4 c = lightIntensity - \n\t\t\n\t\traymarch(mapTo3D(p, voxelSliceInfo), lightPos);\n\tgl_FragColor = vec4(c);\n}\n";
-	}
-	,__class__: IlluminationShader
-});
-var SliceDisplay = function() {
-	shaderblox_ShaderBase.call(this);
-};
-$hxClasses["SliceDisplay"] = SliceDisplay;
-SliceDisplay.__name__ = ["SliceDisplay"];
-SliceDisplay.__super__ = shaderblox_ShaderBase;
-SliceDisplay.prototype = $extend(shaderblox_ShaderBase.prototype,{
-	createProperties: function() {
-		shaderblox_ShaderBase.prototype.createProperties.call(this);
-		var instance = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UFloat"),["iGlobalTime",-1]);
-		this.iGlobalTime = instance;
-		this._uniforms.push(instance);
-		var instance1 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec2"),["iResolution",-1]);
-		this.iResolution = instance1;
-		this._uniforms.push(instance1);
-		var instance2 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["iMouse",-1]);
-		this.iMouse = instance2;
-		this._uniforms.push(instance2);
-		var instance3 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UTexture"),["voxelSlices",-1,false]);
-		this.voxelSlices = instance3;
-		this._uniforms.push(instance3);
-		var instance4 = Type.createInstance(Type.resolveClass("shaderblox.uniforms.UVec3"),["voxelSliceInfo",-1]);
-		this.voxelSliceInfo = instance4;
-		this._uniforms.push(instance4);
-		var instance5 = Type.createInstance(Type.resolveClass("shaderblox.attributes.FloatAttribute"),["vertex",0,2]);
-		this.vertex = instance5;
-		this._attributes.push(instance5);
-		this._aStride += 8;
-	}
-	,initSources: function() {
-		this._vertSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nattribute vec2 vertex;\nvarying vec2 p;\n\nvoid main(){\n\tp = vertex * .5 + vec2(0.5, 0.5);\n\tgl_Position = vec4(vertex, 0.0, 1.0 );\n}\n\n";
-		this._fragSource = "\n#ifdef GL_ES\nprecision mediump float;\n#endif\n\nuniform float iGlobalTime;\nuniform vec2 iResolution;\nuniform vec3 iMouse;\nuniform sampler2D voxelSlices;\nuniform vec3 voxelSliceInfo;\nvarying vec2 p;\nvoid main(){\n\tgl_FragColor = texture2D(voxelSlices, p);\n}\n";
-	}
-	,__class__: SliceDisplay
+	,__class__: TestShader
 });
 Math.__name__ = ["Math"];
 var Reflect = function() { };
@@ -722,9 +407,6 @@ Reflect.field = function(o,field) {
 		if (e instanceof js__$Boot_HaxeError) e = e.val;
 		return null;
 	}
-};
-Reflect.setField = function(o,field,value) {
-	o[field] = value;
 };
 Reflect.callMethod = function(o,func,args) {
 	return func.apply(o,args);
@@ -753,7 +435,7 @@ SnowApp.__name__ = ["SnowApp"];
 SnowApp.main = function() {
 	SnowApp._snow = new snow_Snow();
 	SnowApp._host = new Main();
-	var _snow_config = { has_loop : true, config_custom_assets : false, config_custom_runtime : false, config_runtime_path : "config.json", config_assets_path : "manifest", app_package : "com.haxiomic.volume-render"};
+	var _snow_config = { has_loop : true, config_custom_assets : false, config_custom_runtime : false, config_runtime_path : "config.json", config_assets_path : "manifest", app_package : "com.haxiomic.voxelrender"};
 	SnowApp._snow.init(_snow_config,SnowApp._host);
 };
 var Std = function() { };
@@ -896,244 +578,6 @@ Type["typeof"] = function(v) {
 	default:
 		return ValueType.TUnknown;
 	}
-};
-var _$VoxReader_Color_$Impl_$ = {};
-$hxClasses["_VoxReader.Color_Impl_"] = _$VoxReader_Color_$Impl_$;
-_$VoxReader_Color_$Impl_$.__name__ = ["_VoxReader","Color_Impl_"];
-_$VoxReader_Color_$Impl_$._new = function(r,g,b,a) {
-	return { r : r, g : g, b : b, a : a};
-};
-_$VoxReader_Color_$Impl_$.fromInt = function(hex) {
-	var r = hex >> 16;
-	var g = hex >> 8 & 255;
-	var b = hex & 255;
-	return _$VoxReader_Color_$Impl_$._new(r,g,b,255);
-};
-var _$VoxReader_VoxChunk = $hxClasses["_VoxReader.VoxChunk"] = { __ename__ : ["_VoxReader","VoxChunk"], __constructs__ : ["MAIN","SIZE","VOXEL","RGBA"] };
-_$VoxReader_VoxChunk.MAIN = function(children) { var $x = ["MAIN",0,children]; $x.__enum__ = _$VoxReader_VoxChunk; return $x; };
-_$VoxReader_VoxChunk.SIZE = function(x,y,z) { var $x = ["SIZE",1,x,y,z]; $x.__enum__ = _$VoxReader_VoxChunk; return $x; };
-_$VoxReader_VoxChunk.VOXEL = function(voxels) { var $x = ["VOXEL",2,voxels]; $x.__enum__ = _$VoxReader_VoxChunk; return $x; };
-_$VoxReader_VoxChunk.RGBA = function(colors) { var $x = ["RGBA",3,colors]; $x.__enum__ = _$VoxReader_VoxChunk; return $x; };
-var VoxReader = function() { };
-$hxClasses["VoxReader"] = VoxReader;
-VoxReader.__name__ = ["VoxReader"];
-VoxReader.read = function(bytes) {
-	VoxReader.stream = new haxe_io_BytesInput(bytes);
-	if(VoxReader.readVoxHeader() == null) throw new js__$Boot_HaxeError("invalid VOX header");
-	var mainChunk = VoxReader.readChunk();
-	var vox = { voxels : null, palette : VoxReader.defaultPalette, size : null};
-	{
-		var chunk = mainChunk;
-		if(mainChunk == null) throw new js__$Boot_HaxeError("no MAIN chunk"); else switch(mainChunk[1]) {
-		case 0:
-			var children = mainChunk[2];
-			var _g = 0;
-			while(_g < children.length) {
-				var c = children[_g];
-				++_g;
-				{
-					var chunk1 = c;
-					switch(c[1]) {
-					case 1:
-						var z = c[4];
-						var y = c[3];
-						var x = c[2];
-						vox.size = { x : x, y : y, z : z};
-						break;
-					case 2:
-						var voxels = c[2];
-						vox.voxels = voxels;
-						break;
-					case 3:
-						var colors = c[2];
-						vox.palette = colors;
-						break;
-					default:
-						throw new js__$Boot_HaxeError("unexpected child chunk '" + chunk1[0] + "'");
-					}
-				}
-			}
-			break;
-		default:
-			throw new js__$Boot_HaxeError("unexpected chunk '" + chunk[0] + "' in place of MAIN chunk");
-		}
-	}
-	return vox;
-};
-VoxReader.readVoxHeader = function() {
-	var pre = VoxReader.stream.readString(4);
-	if(pre != "VOX ") return null;
-	var version = VoxReader.stream.readInt32();
-	return { version : version};
-};
-VoxReader.readChunkHeader = function() {
-	var id = VoxReader.stream.readString(4);
-	var contentsSize = VoxReader.stream.readInt32();
-	var childrenSize = VoxReader.stream.readInt32();
-	return { id : id, contentsSize : contentsSize, childrenSize : childrenSize};
-};
-VoxReader.readChunk = function() {
-	var header = VoxReader.readChunkHeader();
-	var chunk = null;
-	var _g = header.id;
-	var id = _g;
-	switch(_g) {
-	case "MAIN":
-		var children = [];
-		var i = header.childrenSize;
-		var pb = VoxReader.stream.pos;
-		while(i > 0) {
-			children.push(VoxReader.readChunk());
-			i -= VoxReader.stream.pos - pb;
-			pb = VoxReader.stream.pos;
-		}
-		chunk = _$VoxReader_VoxChunk.MAIN(children);
-		break;
-	case "SIZE":
-		var x = VoxReader.stream.readInt32();
-		var y = VoxReader.stream.readInt32();
-		var z = VoxReader.stream.readInt32();
-		chunk = _$VoxReader_VoxChunk.SIZE(x,y,z);
-		break;
-	case "XYZI":
-		var numVoxels = VoxReader.stream.readInt32();
-		var voxels = [];
-		var i1 = numVoxels;
-		while(i1-- > 0) voxels.push({ x : VoxReader.stream.readByte(), y : VoxReader.stream.readByte(), z : VoxReader.stream.readByte(), colorIndex : VoxReader.stream.readByte()});
-		chunk = _$VoxReader_VoxChunk.VOXEL(voxels);
-		break;
-	case "PALETTE":case "RGBA":
-		var numColors = Math.floor(header.contentsSize / 4);
-		var colors = [];
-		var i2 = numColors;
-		while(i2-- > 0) colors.push({ r : VoxReader.stream.readByte(), g : VoxReader.stream.readByte(), b : VoxReader.stream.readByte(), a : VoxReader.stream.readByte()});
-		chunk = _$VoxReader_VoxChunk.RGBA(colors);
-		break;
-	default:
-		var _g1 = VoxReader.stream;
-		_g1.set_position(_g1.pos + header.contentsSize);
-		var i3 = header.childrenSize;
-		var pb1 = VoxReader.stream.pos;
-		while(i3 > 0) {
-			VoxReader.readChunk();
-			i3 -= VoxReader.stream.pos - pb1;
-			pb1 = VoxReader.stream.pos;
-		}
-	}
-	return chunk;
-};
-var gltoolbox_GeometryTools = function() { };
-$hxClasses["gltoolbox.GeometryTools"] = gltoolbox_GeometryTools;
-gltoolbox_GeometryTools.__name__ = ["gltoolbox","GeometryTools"];
-gltoolbox_GeometryTools.getCachedUnitQuad = function(drawMode) {
-	if(drawMode == null) drawMode = 5;
-	var unitQuad = gltoolbox_GeometryTools.unitQuadCache.h[drawMode];
-	if(unitQuad == null || !snow_modules_opengl_web_GL.isBuffer(unitQuad)) {
-		unitQuad = gltoolbox_GeometryTools.createQuad(0,0,1,1,drawMode);
-		gltoolbox_GeometryTools.unitQuadCache.h[drawMode] = unitQuad;
-	}
-	return unitQuad;
-};
-gltoolbox_GeometryTools.getCachedClipSpaceQuad = function(drawMode) {
-	if(drawMode == null) drawMode = 5;
-	var clipSpaceQuad = gltoolbox_GeometryTools.clipSpaceQuadCache.h[drawMode];
-	if(clipSpaceQuad == null || !snow_modules_opengl_web_GL.isBuffer(clipSpaceQuad)) {
-		clipSpaceQuad = gltoolbox_GeometryTools.createQuad(-1,-1,2,2,drawMode);
-		gltoolbox_GeometryTools.clipSpaceQuadCache.h[drawMode] = clipSpaceQuad;
-	}
-	return clipSpaceQuad;
-};
-gltoolbox_GeometryTools.createUnitQuad = function(drawMode) {
-	if(drawMode == null) drawMode = 5;
-	return gltoolbox_GeometryTools.createQuad(0,0,1,1,drawMode);
-};
-gltoolbox_GeometryTools.createClipSpaceQuad = function(drawMode) {
-	if(drawMode == null) drawMode = 5;
-	return gltoolbox_GeometryTools.createQuad(-1,-1,2,2,drawMode);
-};
-gltoolbox_GeometryTools.createQuad = function(originX,originY,width,height,drawMode,usage) {
-	if(usage == null) usage = 35044;
-	if(drawMode == null) drawMode = 5;
-	if(height == null) height = 1;
-	if(width == null) width = 1;
-	if(originY == null) originY = 0;
-	if(originX == null) originX = 0;
-	var quad = snow_modules_opengl_web_GL.createBuffer();
-	var vertices = [];
-	switch(drawMode) {
-	case 5:case 4:
-		vertices = [originX,originY + height,originX,originY,originX + width,originY + height,originX + width,originY];
-		if(drawMode == 4) vertices = vertices.concat([originX + width,originY + height,originX,originY]);
-		break;
-	case 6:
-		vertices = [originX,originY + height,originX,originY,originX + width,originY,originX + width,originY + height];
-		break;
-	}
-	snow_modules_opengl_web_GL.bindBuffer(34962,quad);
-	snow_modules_opengl_web_GL.bufferData(34962,(function($this) {
-		var $r;
-		var len = null;
-		var this1;
-		if(vertices != null) this1 = new Float32Array(vertices); else this1 = null;
-		$r = this1;
-		return $r;
-	}(this)),usage);
-	snow_modules_opengl_web_GL.bindBuffer(34962,null);
-	return quad;
-};
-gltoolbox_GeometryTools.boundaryLinesArray = function(width,height) {
-	var array = [0.5,0,0.5,height,0,height - 0.5,width,height - 0.5,width - 0.5,height,width - 0.5,0,width,0.5,0,0.5];
-	var len = null;
-	var this1;
-	if(array != null) this1 = new Float32Array(array); else this1 = null;
-	return this1;
-};
-var gltoolbox_MathTools = function() { };
-$hxClasses["gltoolbox.MathTools"] = gltoolbox_MathTools;
-gltoolbox_MathTools.__name__ = ["gltoolbox","MathTools"];
-gltoolbox_MathTools.upperPowerOf2 = function(v) {
-	v--;
-	v |= v >> 1;
-	v |= v >> 2;
-	v |= v >> 4;
-	v |= v >> 8;
-	v |= v >> 16;
-	v++;
-	return v;
-};
-var gltoolbox_TextureTools = function() { };
-$hxClasses["gltoolbox.TextureTools"] = gltoolbox_TextureTools;
-gltoolbox_TextureTools.__name__ = ["gltoolbox","TextureTools"];
-gltoolbox_TextureTools.createTextureFactory = function(params) {
-	return function(width,height) {
-		return gltoolbox_TextureTools.createTexture(width,height,params);
-	};
-};
-gltoolbox_TextureTools.createFloatTextureRGB = function(width,height) {
-	return gltoolbox_TextureTools.createTexture(width,height,{ channelType : 6407, dataType : 5126});
-};
-gltoolbox_TextureTools.createFloatTextureRGBA = function(width,height) {
-	return gltoolbox_TextureTools.createTexture(width,height,{ channelType : 6408, dataType : 5126});
-};
-gltoolbox_TextureTools.createTexture = function(width,height,params) {
-	if(params == null) params = { };
-	var _g = 0;
-	var _g1 = Reflect.fields(gltoolbox_TextureTools.defaultParams);
-	while(_g < _g1.length) {
-		var f = _g1[_g];
-		++_g;
-		if(!Object.prototype.hasOwnProperty.call(params,f)) Reflect.setField(params,f,Reflect.field(gltoolbox_TextureTools.defaultParams,f));
-	}
-	var texture = snow_modules_opengl_web_GL.createTexture();
-	snow_modules_opengl_web_GL.bindTexture(3553,texture);
-	snow_modules_opengl_web_GL.texParameteri(3553,10241,params.filter);
-	snow_modules_opengl_web_GL.texParameteri(3553,10240,params.filter);
-	snow_modules_opengl_web_GL.texParameteri(3553,10242,params.wrapS);
-	snow_modules_opengl_web_GL.texParameteri(3553,10243,params.wrapT);
-	snow_modules_opengl_web_GL.pixelStorei(3317,params.unpackAlignment);
-	snow_modules_opengl_web_GL.texImage2D(3553,0,params.channelType,width,height,0,params.channelType,params.dataType,null);
-	snow_modules_opengl_web_GL.bindTexture(3553,null);
-	return texture;
 };
 var haxe_IMap = function() { };
 $hxClasses["haxe.IMap"] = haxe_IMap;
@@ -1926,95 +1370,6 @@ haxe_io_Bytes.prototype = {
 	}
 	,__class__: haxe_io_Bytes
 };
-var haxe_io_Input = function() { };
-$hxClasses["haxe.io.Input"] = haxe_io_Input;
-haxe_io_Input.__name__ = ["haxe","io","Input"];
-haxe_io_Input.prototype = {
-	readByte: function() {
-		throw new js__$Boot_HaxeError("Not implemented");
-	}
-	,readBytes: function(s,pos,len) {
-		var k = len;
-		var b = s.b;
-		if(pos < 0 || len < 0 || pos + len > s.length) throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-		while(k > 0) {
-			b[pos] = this.readByte();
-			pos++;
-			k--;
-		}
-		return len;
-	}
-	,readFullBytes: function(s,pos,len) {
-		while(len > 0) {
-			var k = this.readBytes(s,pos,len);
-			pos += k;
-			len -= k;
-		}
-	}
-	,readInt32: function() {
-		var ch1 = this.readByte();
-		var ch2 = this.readByte();
-		var ch3 = this.readByte();
-		var ch4 = this.readByte();
-		if(this.bigEndian) return ch4 | ch3 << 8 | ch2 << 16 | ch1 << 24; else return ch1 | ch2 << 8 | ch3 << 16 | ch4 << 24;
-	}
-	,readString: function(len) {
-		var b = haxe_io_Bytes.alloc(len);
-		this.readFullBytes(b,0,len);
-		return b.toString();
-	}
-	,__class__: haxe_io_Input
-};
-var haxe_io_BytesInput = function(b,pos,len) {
-	if(pos == null) pos = 0;
-	if(len == null) len = b.length - pos;
-	if(pos < 0 || len < 0 || pos + len > b.length) throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-	this.b = b.b;
-	this.pos = pos;
-	this.len = len;
-	this.totlen = len;
-};
-$hxClasses["haxe.io.BytesInput"] = haxe_io_BytesInput;
-haxe_io_BytesInput.__name__ = ["haxe","io","BytesInput"];
-haxe_io_BytesInput.__super__ = haxe_io_Input;
-haxe_io_BytesInput.prototype = $extend(haxe_io_Input.prototype,{
-	set_position: function(p) {
-		if(p < 0) p = 0; else if(p > this.totlen) p = this.totlen;
-		this.len = this.totlen - p;
-		return this.pos = p;
-	}
-	,readByte: function() {
-		if(this.len == 0) throw new js__$Boot_HaxeError(new haxe_io_Eof());
-		this.len--;
-		return this.b[this.pos++];
-	}
-	,readBytes: function(buf,pos,len) {
-		if(pos < 0 || len < 0 || pos + len > buf.length) throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-		if(this.len == 0 && len > 0) throw new js__$Boot_HaxeError(new haxe_io_Eof());
-		if(this.len < len) len = this.len;
-		var b1 = this.b;
-		var b2 = buf.b;
-		var _g = 0;
-		while(_g < len) {
-			var i = _g++;
-			b2[pos + i] = b1[this.pos + i];
-		}
-		this.pos += len;
-		this.len -= len;
-		return len;
-	}
-	,__class__: haxe_io_BytesInput
-});
-var haxe_io_Eof = function() {
-};
-$hxClasses["haxe.io.Eof"] = haxe_io_Eof;
-haxe_io_Eof.__name__ = ["haxe","io","Eof"];
-haxe_io_Eof.prototype = {
-	toString: function() {
-		return "Eof";
-	}
-	,__class__: haxe_io_Eof
-};
 var haxe_io_Error = $hxClasses["haxe.io.Error"] = { __ename__ : ["haxe","io","Error"], __constructs__ : ["Blocked","Overflow","OutsideBounds","Custom"] };
 haxe_io_Error.Blocked = ["Blocked",0];
 haxe_io_Error.Blocked.__enum__ = haxe_io_Error;
@@ -2584,51 +1939,6 @@ shaderblox_uniforms_IAppliable.__name__ = ["shaderblox","uniforms","IAppliable"]
 shaderblox_uniforms_IAppliable.prototype = {
 	__class__: shaderblox_uniforms_IAppliable
 };
-var shaderblox_uniforms_UniformBase_$Float = function(name,index,data) {
-	this.name = name;
-	this.location = index;
-	{
-		this.dirty = true;
-		this.data = data;
-	}
-	this.dirty = true;
-};
-$hxClasses["shaderblox.uniforms.UniformBase_Float"] = shaderblox_uniforms_UniformBase_$Float;
-shaderblox_uniforms_UniformBase_$Float.__name__ = ["shaderblox","uniforms","UniformBase_Float"];
-shaderblox_uniforms_UniformBase_$Float.prototype = {
-	set: function(data) {
-		this.dirty = true;
-		return (function($this) {
-			var $r;
-			$this.dirty = true;
-			$r = $this.data = data;
-			return $r;
-		}(this));
-	}
-	,setDirty: function() {
-		this.dirty = true;
-	}
-	,set_data: function(data) {
-		this.dirty = true;
-		return this.data = data;
-	}
-	,__class__: shaderblox_uniforms_UniformBase_$Float
-};
-var shaderblox_uniforms_UFloat = function(name,index,f) {
-	if(f == null) f = 0.0;
-	shaderblox_uniforms_UniformBase_$Float.call(this,name,index,f);
-};
-$hxClasses["shaderblox.uniforms.UFloat"] = shaderblox_uniforms_UFloat;
-shaderblox_uniforms_UFloat.__name__ = ["shaderblox","uniforms","UFloat"];
-shaderblox_uniforms_UFloat.__interfaces__ = [shaderblox_uniforms_IAppliable];
-shaderblox_uniforms_UFloat.__super__ = shaderblox_uniforms_UniformBase_$Float;
-shaderblox_uniforms_UFloat.prototype = $extend(shaderblox_uniforms_UniformBase_$Float.prototype,{
-	apply: function() {
-		snow_modules_opengl_web_GL.uniform1f(this.location,this.data);
-		this.dirty = false;
-	}
-	,__class__: shaderblox_uniforms_UFloat
-});
 var shaderblox_uniforms_UniformBase_$js_$html_$webgl_$Texture = function(name,index,data) {
 	this.name = name;
 	this.location = index;
@@ -2679,183 +1989,6 @@ shaderblox_uniforms_UTexture.prototype = $extend(shaderblox_uniforms_UniformBase
 		this.dirty = false;
 	}
 	,__class__: shaderblox_uniforms_UTexture
-});
-var shaderblox_uniforms_Vector2 = function(x,y) {
-	if(y == null) y = 0;
-	if(x == null) x = 0;
-	this.x = x;
-	this.y = y;
-};
-$hxClasses["shaderblox.uniforms.Vector2"] = shaderblox_uniforms_Vector2;
-shaderblox_uniforms_Vector2.__name__ = ["shaderblox","uniforms","Vector2"];
-shaderblox_uniforms_Vector2.prototype = {
-	set: function(x,y) {
-		this.x = x;
-		this.y = y;
-	}
-	,__class__: shaderblox_uniforms_Vector2
-};
-var shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2 = function(name,index,data) {
-	this.name = name;
-	this.location = index;
-	{
-		this.dirty = true;
-		this.data = data;
-	}
-	this.dirty = true;
-};
-$hxClasses["shaderblox.uniforms.UniformBase_shaderblox_uniforms_Vector2"] = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2;
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2.__name__ = ["shaderblox","uniforms","UniformBase_shaderblox_uniforms_Vector2"];
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2.prototype = {
-	set: function(data) {
-		this.dirty = true;
-		return (function($this) {
-			var $r;
-			$this.dirty = true;
-			$r = $this.data = data;
-			return $r;
-		}(this));
-	}
-	,setDirty: function() {
-		this.dirty = true;
-	}
-	,set_data: function(data) {
-		this.dirty = true;
-		return this.data = data;
-	}
-	,__class__: shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2
-};
-var shaderblox_uniforms_UVec2 = function(name,index,x,y) {
-	if(y == null) y = 0;
-	if(x == null) x = 0;
-	shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2.call(this,name,index,new shaderblox_uniforms_Vector2(x,y));
-};
-$hxClasses["shaderblox.uniforms.UVec2"] = shaderblox_uniforms_UVec2;
-shaderblox_uniforms_UVec2.__name__ = ["shaderblox","uniforms","UVec2"];
-shaderblox_uniforms_UVec2.__interfaces__ = [shaderblox_uniforms_IAppliable];
-shaderblox_uniforms_UVec2.__super__ = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2;
-shaderblox_uniforms_UVec2.prototype = $extend(shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector2.prototype,{
-	apply: function() {
-		snow_modules_opengl_web_GL.uniform2f(this.location,this.data.x,this.data.y);
-		this.dirty = false;
-	}
-	,__class__: shaderblox_uniforms_UVec2
-});
-var shaderblox_uniforms_Vector3 = function(x,y,z) {
-	this.x = x;
-	this.y = y;
-	this.z = z;
-};
-$hxClasses["shaderblox.uniforms.Vector3"] = shaderblox_uniforms_Vector3;
-shaderblox_uniforms_Vector3.__name__ = ["shaderblox","uniforms","Vector3"];
-shaderblox_uniforms_Vector3.prototype = {
-	__class__: shaderblox_uniforms_Vector3
-};
-var shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3 = function(name,index,data) {
-	this.name = name;
-	this.location = index;
-	{
-		this.dirty = true;
-		this.data = data;
-	}
-	this.dirty = true;
-};
-$hxClasses["shaderblox.uniforms.UniformBase_shaderblox_uniforms_Vector3"] = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3;
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3.__name__ = ["shaderblox","uniforms","UniformBase_shaderblox_uniforms_Vector3"];
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3.prototype = {
-	set: function(data) {
-		this.dirty = true;
-		return (function($this) {
-			var $r;
-			$this.dirty = true;
-			$r = $this.data = data;
-			return $r;
-		}(this));
-	}
-	,setDirty: function() {
-		this.dirty = true;
-	}
-	,set_data: function(data) {
-		this.dirty = true;
-		return this.data = data;
-	}
-	,__class__: shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3
-};
-var shaderblox_uniforms_UVec3 = function(name,index,x,y,z) {
-	if(z == null) z = 0;
-	if(y == null) y = 0;
-	if(x == null) x = 0;
-	shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3.call(this,name,index,new shaderblox_uniforms_Vector3(x,y,z));
-};
-$hxClasses["shaderblox.uniforms.UVec3"] = shaderblox_uniforms_UVec3;
-shaderblox_uniforms_UVec3.__name__ = ["shaderblox","uniforms","UVec3"];
-shaderblox_uniforms_UVec3.__interfaces__ = [shaderblox_uniforms_IAppliable];
-shaderblox_uniforms_UVec3.__super__ = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3;
-shaderblox_uniforms_UVec3.prototype = $extend(shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector3.prototype,{
-	apply: function() {
-		snow_modules_opengl_web_GL.uniform3f(this.location,this.data.x,this.data.y,this.data.z);
-		this.dirty = false;
-	}
-	,__class__: shaderblox_uniforms_UVec3
-});
-var shaderblox_uniforms_Vector4 = function(x,y,z,w) {
-	this.x = x;
-	this.y = y;
-	this.z = z;
-	this.w = w;
-};
-$hxClasses["shaderblox.uniforms.Vector4"] = shaderblox_uniforms_Vector4;
-shaderblox_uniforms_Vector4.__name__ = ["shaderblox","uniforms","Vector4"];
-shaderblox_uniforms_Vector4.prototype = {
-	__class__: shaderblox_uniforms_Vector4
-};
-var shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4 = function(name,index,data) {
-	this.name = name;
-	this.location = index;
-	{
-		this.dirty = true;
-		this.data = data;
-	}
-	this.dirty = true;
-};
-$hxClasses["shaderblox.uniforms.UniformBase_shaderblox_uniforms_Vector4"] = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4;
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4.__name__ = ["shaderblox","uniforms","UniformBase_shaderblox_uniforms_Vector4"];
-shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4.prototype = {
-	set: function(data) {
-		this.dirty = true;
-		return (function($this) {
-			var $r;
-			$this.dirty = true;
-			$r = $this.data = data;
-			return $r;
-		}(this));
-	}
-	,setDirty: function() {
-		this.dirty = true;
-	}
-	,set_data: function(data) {
-		this.dirty = true;
-		return this.data = data;
-	}
-	,__class__: shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4
-};
-var shaderblox_uniforms_UVec4 = function(name,index,x,y,z,w) {
-	if(w == null) w = 0;
-	if(z == null) z = 0;
-	if(y == null) y = 0;
-	if(x == null) x = 0;
-	shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4.call(this,name,index,new shaderblox_uniforms_Vector4(x,y,z,w));
-};
-$hxClasses["shaderblox.uniforms.UVec4"] = shaderblox_uniforms_UVec4;
-shaderblox_uniforms_UVec4.__name__ = ["shaderblox","uniforms","UVec4"];
-shaderblox_uniforms_UVec4.__interfaces__ = [shaderblox_uniforms_IAppliable];
-shaderblox_uniforms_UVec4.__super__ = shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4;
-shaderblox_uniforms_UVec4.prototype = $extend(shaderblox_uniforms_UniformBase_$shaderblox_$uniforms_$Vector4.prototype,{
-	apply: function() {
-		snow_modules_opengl_web_GL.uniform4f(this.location,this.data.x,this.data.y,this.data.z,this.data.w);
-		this.dirty = false;
-	}
-	,__class__: shaderblox_uniforms_UVec4
 });
 var snow_AppFixedTimestep = function() {
 	this.overflow = 0.0;
@@ -6506,10 +5639,6 @@ var ArrayBuffer = typeof(window) != "undefined" && window.ArrayBuffer || typeof(
 if(ArrayBuffer.prototype.slice == null) ArrayBuffer.prototype.slice = js_html_compat_ArrayBuffer.sliceImpl;
 var DataView = typeof(window) != "undefined" && window.DataView || typeof(global) != "undefined" && global.DataView || js_html_compat_DataView;
 var Uint8Array = typeof(window) != "undefined" && window.Uint8Array || typeof(global) != "undefined" && global.Uint8Array || js_html_compat_Uint8Array._new;
-VoxReader.defaultPalette = [_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215),_$VoxReader_Color_$Impl_$.fromInt(16777215)];
-gltoolbox_GeometryTools.unitQuadCache = new haxe_ds_IntMap();
-gltoolbox_GeometryTools.clipSpaceQuadCache = new haxe_ds_IntMap();
-gltoolbox_TextureTools.defaultParams = { channelType : 6408, dataType : 5121, filter : 9728, wrapS : 33071, wrapT : 33071, unpackAlignment : 4};
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
 haxe_Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
