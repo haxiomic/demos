@@ -1,2 +1,3 @@
 # demos
-using gh-pages for whenever I need to quickly host a demo
+[WIP volumetric rendering](http://haxiomic.github.io/demos/volume-render/)
+[voxel slicing for tiled 3d textures](http://haxiomic.github.io/demos/volume-render-slices/)
