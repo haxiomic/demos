@@ -1,0 +1,9 @@
+- Inside fly through
+- Lower resolution sky
+- Environment shadows
+- Voxel lookup
+- Voxel video
+- Textured base plane
+	- Textured base plane shadows
+- Environment reflecting sides
+- Improved cloud-background blending

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>ShaderToy Cloud Rendering</title>
+	<meta charset="utf-8">
+	<!-- <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"> -->
+
+	<style type="text/css">
+	body{
+		padding: 0;
+		margin: 0;
+		background-color: rgb(76, 162, 207);
+	}
+	canvas{
+		display: block;
+/*		transform: scale(2.0, 2.0);
+		transform-origin: top left;*/
+	}
+	</style>
+</head>
+<body>
+	<!-- Shaders -->
+	<script id="screenProjectionVS" type="x-shader/x-vertex">
+	uniform vec3 cameraNormal;
+	varying vec3 worldCoord;
+
+	const float near = 0.001 * 1.1;
+
+	void main(void){
+		//@! if position behind camera, flatten position to camera plane
+		vec3 p = position;
+
+		vec3 cameraToP = p - cameraPosition;
+		float d = dot(cameraToP, cameraNormal);
+
+		if(d < near){
+	}
+
+		worldCoord = p + 0.5;
+		gl_Position = (projectionMatrix * modelViewMatrix * vec4(p, 1.0));
+	}</script>
+
+	<script id="faceCoordinatesFS" type="x-shader/x-fragment">
+	varying vec3 worldCoord;
+	void main(void){
+		gl_FragColor = vec4(worldCoord, 1.);
+	}
+	</script>
+
+	<script id="raytraceCloudsFS" type="x-shader/x-fragment">
+	uniform vec2 backfaceInvResolution;
+	uniform sampler2D backfaceTexture;
+	uniform sampler2D noiseTexture;
+
+	uniform vec3 sunPosition;
+	uniform float time;
+
+	varying vec3 worldCoord;
+
+	//iq's magic 3d texture noise
+	float noise( in vec3 x ){
+		vec3 p = floor(x);
+		vec3 f = fract(x);
+		f = f*f*(3.0-2.0*f);
+		
+		vec2 uv = (p.xy+vec2(37.0,17.0)*p.z) + f.xy;
+		vec2 rg = texture2D( noiseTexture, (uv+ 0.5)/256.0, -100.0 ).yx;
+		return mix( rg.x, rg.y, f.z );
+	}
+
+	float map5(in vec3 p){
+		vec3 q = p;
+		float f;
+		f  = 0.5000*noise( q ); q = q*2.02;
+		f += 0.2500*noise( q ); q = q*2.03;
+		f += 0.12500*noise( q ); q = q*2.01;
+		f += 0.06250*noise( q ); q = q*2.02;
+		f += 0.03125*noise( q );
+		return f * f * f;
+	}
+
+	float map4(in vec3 p){
+		vec3 q = p;
+		float f;
+		f  = 0.5000*noise( q ); q = q*2.02;
+		f += 0.2500*noise( q ); q = q*2.03;
+		f += 0.12500*noise( q ); q = q*2.01;
+		f += 0.06250*noise( q );
+		return f * f * f * f;
+	}
+
+	float map3(in vec3 p){
+		vec3 q = p;
+		float f;
+		f  = 0.5000*noise( q ); q = q*2.02;
+		f += 0.2500*noise( q ); q = q*2.03;
+		f += 0.12500*noise( q );
+		return f * .60;
+	}
+
+	const float transmittance = 1.4;//1.3
+	vec4 raymarchTransmittance(in vec3 rayStart, in vec3 rayDir, in float maxLen){
+		float scd = distance(cameraPosition, rayStart);//@! review
+
+		float stepSize = 0.01;
+		float tm = 1.0;
+		float t = 0.;
+
+		vec3 col = vec3(0.0);
+
+		for(int i = 0; i < 120; i++){
+			vec3 pos = t * rayDir + rayStart;
+
+			float den = map5(pos * 2.1 + vec3(time * .1, 0.0, time * .05))*(sin(time * 0.5) + 2.0)*.5 - 0.1;
+
+			if(den > 0.01){
+				float dtm = exp(-transmittance * den);
+				tm *= dtm;
+
+				vec3 shadeColor = vec3(130./255., 130./255., 130./255.) * 1.8;
+				vec3 diffuseColor = vec3(255./255., 254./255., 240./255.);
+
+				//debug colors
+				// vec3 shadeColor = vec3(0.0);
+				// vec3 diffuseColor = vec3(255./255., 0./255., 0./255.);
+				// vec3 shadeColor = vec3(0.0, 1.0, 0.0);
+				// vec3 diffuseColor = vec3(1.0, 0.0, 0.0);
+
+				float shadeFactor = 1. - dot(pos, sunPosition);
+
+				vec3 uCol = mix(diffuseColor, shadeColor, shadeFactor) / (pow(shadeFactor + 0.4, .4) * 1.0);
+
+			    col += (1.0 - dtm) * uCol * tm;
+			}
+
+			float df = (scd * .25 + t);
+			// stepSize = max(0.01, df*df*0.03);
+			stepSize = max(0.02, df*df*0.06);
+			t += stepSize;
+
+			//exit condition
+			if(t >= maxLen || tm < 0.01)
+				break;
+		}
+
+		float alpha = 1.0 - tm;
+		return vec4(col / alpha, alpha);
+	}
+
+
+	vec4 raymarch(in vec3 rayStart, in vec3 rayVec){
+		vec4 sum = vec4(vec3(0.), 0.0);
+
+		//dist from start to camera
+		float scd = distance(cameraPosition, rayStart);//@! review
+
+		float rayLen = length(rayVec);
+		vec3 rayDir = rayVec / rayLen;
+
+		float t = 0.0;
+		float delta = 0.0;
+
+		for(int i = 0; i < 120; i++){
+			vec3 pos = rayStart + t * rayDir;
+
+			//get density
+			float den = map5(pos * 5.0);
+
+			// if(length(pos - 0.5) > 0.5){
+			// 	den = 0.;
+			// }
+
+			//add to sum
+			if(den > 0.01){
+				// vec3 shadeColor = vec3(130./255., 142./255., 148./255.);
+				// vec3 diffuseColor = vec3(252./255., 249./255., 252./255.);
+
+				vec3 shadeColor = vec3(0.0, 1.0, 0.0);
+				vec3 diffuseColor = vec3(1.0, 0.0, 0.0);
+
+				//color by density
+				vec4 col = vec4(mix(diffuseColor, shadeColor, den * 1.5), den);
+
+				//shading
+				// float shadeFactor = 1. - dot(pos, sunPosition);
+				// col.xyz = mix(col.xyz, shadeColor, (shadeFactor * shadeFactor) * 0.8 - 0.3);
+
+				/*
+				//lighting
+				// float den2 = map4(pos * 1.0 + (sunPosition));
+				// float dif = clamp((den - den2) / 0.6, 0.0, 1.0);
+				// vec3 lin = vec3(0.65,0.68,0.7)*1.3 + 0.5*vec3(0.7, 0.5, 0.1)*dif*20.0;
+
+				// col.xyz *= lin;
+
+				//shading
+				// vec3 bgcol = vec3(0.8);
+				// col.xyz = mix( col.xyz, bgcol, exp(-10.3*t) );
+				*/
+
+				//@!tmp white
+				// vec4 col = vec4(vec3(1.0), den);
+
+				col.a *= 0.4;
+				col.rgb *= col.a;
+
+				// front to back blending    
+				sum += col * (1.0 - sum.a);
+			}
+
+			//increment ray
+			t += max(0.01, (scd * .2 + t)*0.01);
+
+			//exit condition
+			if(t > rayLen || sum.a > 0.99)
+				break;
+		}
+
+		return clamp( sum, 0.0, 1.0 );
+	}
+
+	void main(void){
+		vec4 bfsamp = texture2D(backfaceTexture, gl_FragCoord.xy * backfaceInvResolution);
+
+		//@!tmp
+		// gl_FragColor = vec4(bfsamp.xyz, 1.0);
+		// return;
+
+		//reject null backface texture sample
+		//this is where the current pixel doesn't line up exactly with a backface pixel
+		if(bfsamp.a < 0.01){
+			gl_FragColor = vec4(0);
+			return;
+		}
+
+		vec3 rayStart = worldCoord;
+		vec3 rayEnd = bfsamp.xyz;
+		vec3 rayVec = rayEnd - rayStart;
+		float rayLen = length(rayVec);
+		vec3 rayDir = rayVec / rayLen;
+
+		vec4 col = raymarchTransmittance(rayStart, rayDir, rayLen);
+
+		//sun glare
+		float dotSun = clamp(dot(sunPosition, rayDir), 0.0, 1.);
+		col.xyz += 0.25*vec3(0.99,0.99,0.92)* dotSun * dotSun * dotSun;
+
+		gl_FragColor = col;
+	}
+	</script>
+
+	<!-- libraries -->
+	<script type="text/javascript" src="js/three/three.min.js"></script>
+	<script type="text/javascript" src="js/three/controls/OrbitControls.js"></script>
+	<script type="text/javascript" src="js/three/shaders/SkyShader.js"></script>
+	<!-- app -->
+	<script type="text/javascript" src="js/url-params.js"></script>
+	<script type="text/javascript" src="js/shader-tools.js"></script>
+	<script type="text/javascript" src="js/app.js"></script>
+</body>
+</html>
