@@ -1,0 +1,10 @@
+-main Main
+-cp src
+-js js/main.js
+-dce full
+-D analyzer
+#Debug
+# -D debug
+
+#Release
+# -D no-traces

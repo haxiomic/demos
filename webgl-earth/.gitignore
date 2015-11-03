@@ -1,0 +1,5 @@
+_rough/
+
+#SASS
+.sass-cache/
+*.css.map
