@@ -25,8 +25,34 @@ AssetEvent.prototype = {
 };
 var CompileTime = function() { };
 CompileTime.__name__ = true;
+var EReg = function(r,opt) {
+	opt = opt.split("u").join("");
+	this.r = new RegExp(r,opt);
+};
+EReg.__name__ = true;
+EReg.prototype = {
+	split: function(s) {
+		var d = "#__delim__#";
+		return s.replace(this.r,d).split(d);
+	}
+	,__class__: EReg
+};
 var HxOverrides = function() { };
 HxOverrides.__name__ = true;
+HxOverrides.cca = function(s,index) {
+	var x = s.charCodeAt(index);
+	if(x != x) return undefined;
+	return x;
+};
+HxOverrides.substr = function(s,pos,len) {
+	if(pos != null && pos != 0 && len != null && len < 0) return "";
+	if(len == null) len = s.length;
+	if(pos < 0) {
+		pos = s.length + pos;
+		if(pos < 0) pos = 0;
+	} else if(len < 0) len = s.length + len - pos;
+	return s.substr(pos,len);
+};
 HxOverrides.remove = function(a,obj) {
 	var i = a.indexOf(obj);
 	if(i == -1) return false;
@@ -40,18 +66,30 @@ HxOverrides.iter = function(a) {
 		return this.arr[this.cur++];
 	}};
 };
-var globe_GeoCoord = function(latitudeNorth,longitudeWest,altitude) {
+var objects_globe_GeoCoord = function(latitudeNorth,longitudeWest,altitude) {
 	if(altitude == null) altitude = 0;
+	if(longitudeWest == null) longitudeWest = 0;
+	if(latitudeNorth == null) latitudeNorth = 0;
 	this.lat = latitudeNorth;
 	this["long"] = longitudeWest;
 	this.alt = altitude;
 };
-globe_GeoCoord.__name__ = true;
-globe_GeoCoord.prototype = {
+objects_globe_GeoCoord.__name__ = true;
+objects_globe_GeoCoord.fromGoogleEarthString = function(coordinates) {
+	var geoCoords = [];
+	var splitRegex = new EReg("\\s+","g");
+	var splitCoordinates = splitRegex.split(StringTools.trim(coordinates));
+	return splitCoordinates.map(function(s) {
+		var sa = s.split(",");
+		if(sa.length != 3) throw new js__$Boot_HaxeError("google earth coordinate parse error");
+		return new objects_globe_GeoCoord(parseFloat(sa[1]),-parseFloat(sa[0]),parseFloat(sa[2]) / 6378100);
+	});
+};
+objects_globe_GeoCoord.prototype = {
 	clone: function() {
-		return new globe_GeoCoord(this.lat,this["long"],this.alt);
+		return new objects_globe_GeoCoord(this.lat,this["long"],this.alt);
 	}
-	,__class__: globe_GeoCoord
+	,__class__: objects_globe_GeoCoord
 };
 var Locations = function() { };
 Locations.__name__ = true;
@@ -73,50 +111,29 @@ var Main = $hx_exports.Globe = function(container,assetRoot) {
 	this.assets = new AssetManager();
 	this._u = new THREE.Vector3();
 	this._v = new THREE.Vector3();
+	this.mouse = new THREE.Vector2();
 	this.renderer = new THREE.WebGLRenderer({ canvas : this.canvas, antialias : true});
-	this.camera = new THREE.PerspectiveCamera(60,this.getAspect(),0.01,10);
+	this.camera = new THREE.PerspectiveCamera(60,this.getAspect(),0.01,10.);
 	this.camera.position.z = this.cameraZForViewHeight(3.);
 	this.controls = new THREE.OrbitControls(this.camera,this.canvas);
 	this.controls.zoomSpeed = 0.1;
 	this.controls.noPan = false;
 	this.scene = new THREE.Scene();
-	this.globe = new globe_Globe(1,assetRoot);
+	this.raycaster = new THREE.Raycaster();
+	this.globe = new objects_globe_Globe(1.0,assetRoot);
 	this.scene.add(this.globe);
-	this.scene.updateMatrixWorld(false);
-	var l1 = Locations.great_barrier_reef;
-	var l2 = Locations.san_francisco;
-	var tmp1;
-	var _this1 = this.globe;
-	tmp1 = _this1.radius * _this1.atmospherePad;
-	var tubeRadius = tmp1 / 2;
-	var tmp2;
-	var _this2 = this.globe;
-	tmp2 = _this2.radius * _this2.atmospherePad;
-	var altitude = tmp2 - tubeRadius;
-	var points = [];
-	var j = 0;
-	var k = 0;
-	var _g = 0;
-	while(_g < 30) {
-		var i = _g++;
-		var space = 1;
-		points.push(this.globe.geoToWorld(new globe_GeoCoord(i * space - 0.000 * i * i * i + l1.lat,-i * 3 * space + 0.1 * i * i + l1["long"],altitude)));
-	}
-	var spline = new THREE.SplineCurve3(points);
-	var tubeGeom = new THREE.TubeGeometry(spline,100,tubeRadius,4,false);
-	var tubeMat = new THREE.MeshPhongMaterial({ color : 16711680, opacity : 0.35, transparent : true, side : THREE.DoubleSide, blending : THREE.NormalBlending});
-	var tube = new THREE.Mesh(tubeGeom,tubeMat);
-	this.scene.add(tube);
-	var sphereNormal = function(u,t,p,tan,curve) {
-		return p;
-	};
-	this.ribbonGeom = new geometry_RibbonGeometry(spline,function(u1,t1) {
-		return 0.05 + Math.sin(u1 * 10) * 0.025;
-	},sphereNormal,300,1);
-	var ribbon = new THREE.Mesh(this.ribbonGeom,new THREE.MeshPhongMaterial({ wireframe : false, color : 16711680, opacity : 0.35, transparent : true, side : THREE.DoubleSide, blending : THREE.NormalBlending}));
-	this.scene.add(ribbon);
+	var worldPoints = [];
+	var dwarfMinke1 = objects_globe_GeoCoord.fromGoogleEarthString("125.4156801502365,-58.06644178916677,0 125.6690520286516,-55.62956556158635,0 127.267928376675,-53.56752695259459,0 133.5113699846749,-50.4080620490514,0 138.1091303679843,-50.0554610120262,0 141.3756905844894,-47.84215473532596,0 142.7930470959936,-45.35806846483599,0 143.1146091547288,-42.35858493540049,0 143.8443439835141,-40.91638203146016,0 144.9290566228453,-39.99707844460131,0 146.1361548412232,-40.05633474347093,0 148.6347794779419,-38.90400726642145,0 150.8132730791048,-38.69979017663795,0 150.8607525529987,-36.9087133250309,0 151.7506201937049,-35.70124561350605,0 152.4544437762779,-34.43477339751064,0 153.2890273962649,-33.30985456413786,0 154.0416606237984,-30.80840612385732,0 154.2295559008717,-28.67535640236151,0 154.1543790811592,-27.27441670127317,0 154.2064531238732,-26.1457257963793,0 154.3767588465649,-24.98956687816237,0 153.9406000752065,-24.32124442129077,0 153.6472408394698,-23.13656635653421,0 153.279744143952,-21.73774779611184,0 152.8385188492032,-20.10522556081435,0 151.4227259204821,-20.06200980245429,0 148.7248788803227,-18.41995668552367,0 146.3472501121291,-16.77763586282796,0 145.7892467894279,-15.83389141911604,0 145.7208699785303,-15.43496316647002,0 145.6457637324097,-15.04734519997,0 145.5644660498914,-14.67653385720298,0 145.2386777927024,-14.38042364771917,0 144.4256531075568,-13.20429306000615,0 144.0648325003543,-11.39726484867401,0 144.1658769571635,-9.951859956488347,0");
+	var dwarfMinke2 = objects_globe_GeoCoord.fromGoogleEarthString("142.6727363765914,-53.22505845480889,0 144.9376957291831,-48.6954057789822,0 144.6613303464107,-46.99317266798141,0 143.5006050162573,-44.20103235263429,0 143.4641679788447,-42.49825056202535,0 144.0807230459198,-40.79318519213684,0 145.0320945747923,-39.34815881312177,0 146.09020401051,-39.683619614156,0 149.4061513009401,-39.05920414030068,0 150.4702065788303,-38.39996007454761,0 151.2582215571639,-36.79586344549869,0 152.1089161857852,-35.58316260832842,0 152.4446138858733,-34.11676932487371,0 153.2763285806631,-32.67025542209145,0 154.4310237107595,-30.24033018786529,0 154.7466089866114,-27.95133000605225,0 154.1857106533873,-26.71168411460474,0 154.2064531238732,-26.1457257963793,0 153.9865893422074,-25.01571282087592,0 153.4380088670825,-23.9144808204616,0 152.7600743252496,-23.13292389452813,0 151.756795361439,-22.22442417072507,0 150.4808253542965,-21.69832816718207,0 149.7130546999975,-20.04725110806228,0 148.0207015153903,-18.79786940126524,0 146.3825639349907,-16.52257966452151,0 145.950931891999,-15.87205122167076,0 145.8401745386045,-15.41257170463565,0 145.7344694275366,-15.03236707400803,0 145.5936447455039,-14.65010871718732,0 145.5330517575169,-14.57280225894031,0 145.3492500285115,-14.3570602392847,0 144.8002489121843,-13.32515491654578,0 144.2913144805902,-11.9193279149041,0 144.505056391914,-11.58086207454052,0");
+	this.trail1 = new objects_migration_MigrationPath(this.globe,dwarfMinke1);
+	this.globe.earthMesh.add(this.trail1);
+	this.trail2 = new objects_migration_MigrationPath(this.globe,dwarfMinke2);
+	this.globe.earthMesh.add(this.trail2);
 	this.debugInit();
 	window.addEventListener("resize",$bind(this,this.onWindowResize),false);
+	this.canvas.addEventListener("mousedown",$bind(this,this.onMouseDown),false);
+	this.canvas.addEventListener("mouseup",$bind(this,this.onMouseUp),false);
+	this.canvas.addEventListener("mousemove",$bind(this,this.onMouseMove),false);
 	window.requestAnimationFrame($bind(this,this.update));
 };
 Main.__name__ = true;
@@ -137,7 +154,7 @@ Main.prototype = {
 		if(time_s == null) time_s = 2;
 		var _g = this;
 		console.log("Globe: setChapter " + i);
-		var locations = [Locations.great_barrier_reef,new globe_GeoCoord(-12.823020,-154.204906),new globe_GeoCoord(13.185726,-159.283641),new globe_GeoCoord(10.173778,-100.150828)];
+		var locations = [Locations.great_barrier_reef,new objects_globe_GeoCoord(-12.823020,-154.204906),new objects_globe_GeoCoord(13.185726,-159.283641),new objects_globe_GeoCoord(10.173778,-100.150828)];
 		var loc = locations[i % locations.length];
 		if(this.marker != null) this.marker.parent.remove(this.marker);
 		this.marker = this.globe.addMarker(loc);
@@ -190,12 +207,33 @@ Main.prototype = {
 		v;
 		this.sunAngularVelocity *= 1 - this.sunSpringDamp;
 	}
+	,raycastGlobe: function(viewClipspace) {
+		this.raycaster.setFromCamera(viewClipspace,this.camera);
+		var intersects = this.raycaster.intersectObject(this.globe.earthMesh,false);
+		if(intersects.length <= 0) return null;
+		return intersects[0].point;
+	}
 	,fitCanvas: function() {
 		this.canvas.width = this.getWidth();
 		this.canvas.height = this.getHeight();
 	}
+	,handleMouseEvent: function(e) {
+		var canvasBounds = this.canvas.getBoundingClientRect();
+		var nx = (e.pageX - canvasBounds.left) / canvasBounds.width;
+		var ny = 1 - (e.pageY - canvasBounds.top) / canvasBounds.height;
+		this.mouse.set(nx * 2 - 1,ny * 2 - 1);
+	}
 	,onWindowResize: function(e) {
 		this.handleResize();
+	}
+	,onMouseDown: function(e) {
+		this.handleMouseEvent(e);
+	}
+	,onMouseUp: function(e) {
+		this.handleMouseEvent(e);
+	}
+	,onMouseMove: function(e) {
+		this.handleMouseEvent(e);
 	}
 	,cameraZForViewHeight: function(height) {
 		return height / 2 / Math.tan(0.5 * THREE.Math.degToRad(this.camera.fov));
@@ -225,15 +263,20 @@ Main.prototype = {
 	,setupDatGUI: function() {
 		var _g = this;
 		var gui = new dat.GUI();
-		gui.add({ x : this.ribbonGeom.curveFraction},"x").name("Curve Fraction").step(0.001).onChange(function(x) {
-			_g.ribbonGeom.set_curveFraction(x);
-		});
-		gui.add(this.camera,"fov").name("FOV").min(1).max(180).onChange(function(x1) {
+		gui.add(this.camera,"fov").name("FOV").min(1).max(180).onChange(function(x) {
 			_g.camera.updateProjectionMatrix();
-			console.log("fov " + x1);
+			console.log("fov " + x);
 		});
 		gui.add(this,"sunSpringK").name("Sun Spring Strength").min(0).max(20);
 		gui.add(this,"sunSpringDamp").name("Sun Spring Dampening").min(0).max(1);
+		gui.add({ v : this.trail1.migrationMaterial.uniforms.offset.value},"v").name("Trail offset").step(0.001).min(-1).max(1).onChange(function(v) {
+			_g.trail1.migrationMaterial.uniforms.offset.value = v;
+			_g.trail2.migrationMaterial.uniforms.offset.value = v;
+		});
+		gui.add({ v : this.trail1.migrationMaterial.uniforms.lengthScale.value},"v").name("Trail lengthScale").step(0.001).onChange(function(v1) {
+			_g.trail1.migrationMaterial.uniforms.lengthScale.value = v1;
+			_g.trail2.migrationMaterial.uniforms.lengthScale.value = v1;
+		});
 		var li = 1;
 		gui.add({ f : function() {
 			_g.setChapter(li++);
@@ -268,6 +311,27 @@ var Std = function() { };
 Std.__name__ = true;
 Std.string = function(s) {
 	return js_Boot.__string_rec(s,"");
+};
+var StringTools = function() { };
+StringTools.__name__ = true;
+StringTools.isSpace = function(s,pos) {
+	var c = HxOverrides.cca(s,pos);
+	return c > 8 && c < 14 || c == 32;
+};
+StringTools.ltrim = function(s) {
+	var l = s.length;
+	var r = 0;
+	while(r < l && StringTools.isSpace(s,r)) r++;
+	if(r > 0) return HxOverrides.substr(s,r,l - r); else return s;
+};
+StringTools.rtrim = function(s) {
+	var l = s.length;
+	var r = 0;
+	while(r < l && StringTools.isSpace(s,l - r - 1)) r++;
+	if(r > 0) return HxOverrides.substr(s,0,l - r); else return s;
+};
+StringTools.trim = function(s) {
+	return StringTools.ltrim(StringTools.rtrim(s));
 };
 var Type = function() { };
 Type.__name__ = true;
@@ -369,318 +433,6 @@ geometry_RibbonGeometry.prototype = $extend(THREE.ParametricGeometry.prototype,{
 	}
 	,__class__: geometry_RibbonGeometry
 	,__properties__: {set_curveFraction:"set_curveFraction"}
-});
-var globe_Atmosphere = function(innerRadius,outerRadius) {
-	THREE.Object3D.call(this);
-	var atmospherePrameters = { innerRadius : innerRadius, outerRadius : outerRadius, Kr : 0.0025, Km : 0.0010, ESun : 20.0, g : -0.990, wavelength : [0.650,0.570,0.475], rayleighScaleDepth : 0.25, mieScaleDepth : 0.1, nSamples : 4};
-	var atmosphereUniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.lights,{ v3InvWavelength : { type : "v3", value : new THREE.Vector3(1 / Math.pow(atmospherePrameters.wavelength[0],4),1 / Math.pow(atmospherePrameters.wavelength[1],4),1 / Math.pow(atmospherePrameters.wavelength[2],4))}, fInnerRadius : { type : "f", value : atmospherePrameters.innerRadius}, fInnerRadius2 : { type : "f", value : atmospherePrameters.innerRadius * atmospherePrameters.innerRadius}, fOuterRadius : { type : "f", value : atmospherePrameters.outerRadius}, fOuterRadius2 : { type : "f", value : atmospherePrameters.outerRadius * atmospherePrameters.outerRadius}, fKrESun : { type : "f", value : atmospherePrameters.Kr * atmospherePrameters.ESun}, fKmESun : { type : "f", value : atmospherePrameters.Km * atmospherePrameters.ESun}, fKr4PI : { type : "f", value : atmospherePrameters.Kr * 4.0 * Math.PI}, fKm4PI : { type : "f", value : atmospherePrameters.Km * 4.0 * Math.PI}, fScale : { type : "f", value : 1 / (atmospherePrameters.outerRadius - atmospherePrameters.innerRadius)}, fScaleDepth : { type : "f", value : atmospherePrameters.rayleighScaleDepth}, fScaleOverScaleDepth : { type : "f", value : 1 / (atmospherePrameters.outerRadius - atmospherePrameters.innerRadius) / atmospherePrameters.rayleighScaleDepth}, g : { type : "f", value : atmospherePrameters.g}, g2 : { type : "f", value : atmospherePrameters.g * atmospherePrameters.g}}]);
-	var defines = { nSamples : atmospherePrameters.nSamples};
-	var atmosphereGeom = new THREE.BufferGeometry().fromGeometry(new THREE.SphereGeometry(innerRadius,120,120));
-	var atmosphereOuterMaterial = new globe_AtmosphereOuterMaterial({ uniforms : atmosphereUniforms, defines : defines});
-	var atmosphereOuterMesh = new THREE.Mesh(atmosphereGeom,atmosphereOuterMaterial);
-	atmosphereOuterMesh.scale.multiplyScalar(outerRadius / innerRadius);
-	var atmosphereInnerMaterial = new globe_AtmosphereInnerMaterial({ uniforms : THREE.UniformsUtils.merge([atmosphereUniforms]), defines : defines});
-	var atmosphereInnerMesh = new THREE.Mesh(atmosphereGeom,atmosphereInnerMaterial);
-	atmosphereInnerMesh.renderOrder = 1;
-	this.add(atmosphereOuterMesh);
-	this.add(atmosphereInnerMesh);
-};
-globe_Atmosphere.__name__ = true;
-globe_Atmosphere.__super__ = THREE.Object3D;
-globe_Atmosphere.prototype = $extend(THREE.Object3D.prototype,{
-	__class__: globe_Atmosphere
-});
-var globe_AtmosphereInnerMaterial = function(parameters) {
-	var p = parameters != null?parameters:{ };
-	p.vertexShader = p.vertexShader != null?p.vertexShader:globe_AtmosphereInnerMaterial.vertexShaderStr;
-	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:globe_AtmosphereInnerMaterial.fragmentShaderStr;
-	p.fog = p.fog != null && p.fog;
-	p.lights = p.lights != null?p.lights:true;
-	p.transparent = p.transparent != null?p.transparent:true;
-	p.side = p.side != null?p.side:THREE.FrontSide;
-	p.blending = THREE.AdditiveBlending;
-	THREE.ShaderMaterial.call(this,p);
-};
-globe_AtmosphereInnerMaterial.__name__ = true;
-globe_AtmosphereInnerMaterial.__super__ = THREE.ShaderMaterial;
-globe_AtmosphereInnerMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
-	__class__: globe_AtmosphereInnerMaterial
-});
-var globe_AtmosphereOuterMaterial = function(parameters) {
-	var p = parameters != null?parameters:{ };
-	p.vertexShader = p.vertexShader != null?p.vertexShader:globe_AtmosphereOuterMaterial.vertexShaderStr;
-	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:globe_AtmosphereOuterMaterial.fragmentShaderStr;
-	p.fog = p.fog != null && p.fog;
-	p.lights = p.lights != null?p.lights:true;
-	p.transparent = p.transparent != null?p.transparent:true;
-	p.side = p.side != null?p.side:THREE.BackSide;
-	p.blending = THREE.AdditiveBlending;
-	THREE.ShaderMaterial.call(this,p);
-};
-globe_AtmosphereOuterMaterial.__name__ = true;
-globe_AtmosphereOuterMaterial.__super__ = THREE.ShaderMaterial;
-globe_AtmosphereOuterMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
-	__class__: globe_AtmosphereOuterMaterial
-});
-var globe_Globe = function(radius,assetRoot) {
-	this.sunDistance = 2.0;
-	this.atmospherePad = 0.005;
-	this.atmosphereEnabled = true;
-	this.atmosphereHeight = 0.05;
-	this.tilt_deg = 23.4;
-	this.radius = radius;
-	THREE.Object3D.call(this);
-	var colorTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/color-1_high.jpg");
-	var normalTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/normal-1_high.jpg");
-	var specTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/specular-1_low.png");
-	colorTex.anisotropy = 4;
-	this.earthContainer = new THREE.Object3D();
-	this.earthContainer.rotateZ(-THREE.Math.degToRad(this.tilt_deg));
-	this.add(this.earthContainer);
-	var earthGeom = new THREE.BufferGeometry().fromGeometry(new THREE.SphereGeometry(radius,80,80));
-	var globeMat = new globe_GlobeMaterial({ map : colorTex, normalMap : normalTex, normalScale : new THREE.Vector3(1.0,1.0,1.0), specularMap : specTex, specular : new THREE.Color(3355443), shininess : 12, wireframe : false});
-	this.earthMesh = new THREE.Mesh(earthGeom,globeMat);
-	this.earthContainer.add(this.earthMesh);
-	if(this.atmosphereEnabled) {
-		this.atmosphere = new globe_Atmosphere(radius * (1 + this.atmospherePad),radius * (this.atmosphereHeight + 1));
-		this.earthContainer.add(this.atmosphere);
-	}
-	this.sun = new THREE.DirectionalLight(16774642,1.0);
-	this.sun.position.set(0,0,radius * 2);
-	this.sun.target.position.set(0,0,0);
-	this.add(this.sun);
-	this.earthMesh.rotation.y = 0;
-	if(this.atmosphereEnabled) this.atmosphere.rotation.y = 0;
-	this.sun.position.set(Math.sin(0) * this.sunDistance,0,Math.cos(0) * this.sunDistance);
-};
-globe_Globe.__name__ = true;
-globe_Globe.__super__ = THREE.Object3D;
-globe_Globe.prototype = $extend(THREE.Object3D.prototype,{
-	geoToWorld: function(c,v) {
-		var local = this.geoToLocal(c,v);
-		return this.earthMesh.localToWorld(local);
-	}
-	,geoToLocal: function(c,v) {
-		if(v == null) v = new THREE.Vector3();
-		var latRad = THREE.Math.degToRad(c.lat);
-		var longRad = THREE.Math.degToRad(c["long"]);
-		var r = this.radius + c.alt;
-		v.x = r * Math.cos(latRad) * Math.cos(longRad);
-		v.z = r * Math.cos(latRad) * Math.sin(longRad);
-		v.y = r * Math.sin(latRad);
-		return v;
-	}
-	,addMarker: function(c) {
-		var local = this.geoToLocal(c);
-		var markerSphere = new THREE.SphereGeometry(0.01,10,10);
-		var marker = new THREE.Mesh(markerSphere,new THREE.MeshNormalMaterial());
-		marker.position.copy(local);
-		this.earthMesh.add(marker);
-		local.clone().normalize().multiplyScalar(this.radius);
-		var arrow = new THREE.ArrowHelper(local.clone().normalize(),new THREE.Vector3(0,0,0),c.alt + 0.1,16711680);
-		marker.add(arrow);
-		return marker;
-	}
-	,get_earthAngle: function() {
-		return this.earthMesh.rotation.y;
-	}
-	,set_earthAngle: function(v) {
-		this.earthMesh.rotation.y = v;
-		if(this.atmosphereEnabled) this.atmosphere.rotation.y = v;
-		return v;
-	}
-	,get_sunAngle: function() {
-		return Math.atan2(this.sun.position.x,this.sun.position.z);
-	}
-	,set_sunAngle: function(v) {
-		this.sun.position.set(Math.sin(v) * this.sunDistance,0,Math.cos(v) * this.sunDistance);
-		return v;
-	}
-	,get_atmosphereGap: function() {
-		return this.radius * this.atmospherePad;
-	}
-	,__class__: globe_Globe
-	,__properties__: {get_atmosphereGap:"get_atmosphereGap",set_sunAngle:"set_sunAngle",get_sunAngle:"get_sunAngle",set_earthAngle:"set_earthAngle",get_earthAngle:"get_earthAngle"}
-});
-var globe_GlobeMaterial = function(parameters) {
-	var p = parameters != null?parameters:{ };
-	p.uniforms = p.uniforms != null?p.uniforms:THREE.UniformsUtils.merge([THREE.UniformsLib.common,THREE.UniformsLib.bump,THREE.UniformsLib.normalmap,THREE.UniformsLib.lights,{ 'emissive' : { type : "c", value : new THREE.Color(0)}, 'specular' : { type : "c", value : new THREE.Color(1118481)}, 'shininess' : { type : "f", value : 30}, 'wrapRGB' : { type : "v3", value : new THREE.Vector3(1,1,1)}}]);
-	p.vertexShader = p.vertexShader != null?p.vertexShader:globe_GlobeMaterial.vertexShaderStr;
-	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:globe_GlobeMaterial.fragmentShaderStr;
-	p.fog = p.fog != null && p.fog;
-	p.lights = p.lights != null?p.lights:true;
-	THREE.ShaderMaterial.call(this,{ });
-	this.uniforms = p.uniforms;
-	this.vertexShader = p.vertexShader;
-	this.fragmentShader = p.fragmentShader;
-	this.fog = p.fog;
-	this.lights = p.lights;
-	this.set_opacity_(p.opacity_ != null?p.opacity_:this.get_opacity_());
-	this.set_diffuse(p.diffuse != null?p.diffuse:this.get_diffuse());
-	this.set_map(p.map != null?p.map:this.get_map());
-	this.set_specularMap(p.specularMap != null?p.specularMap:this.get_specularMap());
-	this.set_normalMap(p.normalMap != null?p.normalMap:this.get_normalMap());
-	this.set_normalScale(p.normalScale != null?p.normalScale:this.get_normalScale());
-	this.set_alphaMap(p.alphaMap != null?p.alphaMap:this.get_alphaMap());
-	this.set_bumpMap(p.bumpMap != null?p.bumpMap:this.get_bumpMap());
-	this.set_bumpScale(p.bumpScale != null?p.bumpScale:this.get_bumpScale());
-	this.set_reflectivity(p.reflectivity != null?p.reflectivity:this.get_reflectivity());
-	this.set_refractionRatio(p.refractionRatio != null?p.refractionRatio:this.get_refractionRatio());
-	this.set_shininess(p.shininess != null?p.shininess:this.get_shininess());
-	this.set_emissive(p.emissive != null?p.emissive:this.get_emissive());
-	this.set_specular(p.specular != null?p.specular:this.get_specular());
-	this.set_offsetRepeatOverride(p.offsetRepeatOverride != null?p.offsetRepeatOverride:this.get_offsetRepeatOverride());
-};
-globe_GlobeMaterial.__name__ = true;
-globe_GlobeMaterial.__super__ = THREE.ShaderMaterial;
-globe_GlobeMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
-	clone: function(material) {
-		if(material != null) return THREE.ShaderMaterial.prototype.clone.call(this,material); else {
-			var globeMaterial = new globe_GlobeMaterial();
-			THREE.ShaderMaterial.prototype.clone.call(this,globeMaterial);
-			globeMaterial.fragmentShader = this.fragmentShader;
-			globeMaterial.vertexShader = this.vertexShader;
-			globeMaterial.uniforms = THREE.UniformsUtils.clone(this.uniforms);
-			globeMaterial.defines = this.defines;
-			globeMaterial.shading = this.shading;
-			globeMaterial.wireframe = this.wireframe;
-			globeMaterial.wireframeLinewidth = this.wireframeLinewidth;
-			globeMaterial.fog = this.fog;
-			globeMaterial.lights = this.lights;
-			globeMaterial.vertexColors = this.vertexColors;
-			globeMaterial.skinning = this.skinning;
-			globeMaterial.morphTargets = this.morphTargets;
-			globeMaterial.morphNormals = this.morphNormals;
-			globeMaterial.set_opacity_(this.get_opacity_());
-			globeMaterial.set_diffuse(this.get_diffuse());
-			globeMaterial.set_map(this.get_map());
-			globeMaterial.set_specularMap(this.get_specularMap());
-			globeMaterial.set_normalMap(this.get_normalMap());
-			globeMaterial.set_normalScale(this.get_normalScale());
-			globeMaterial.set_alphaMap(this.get_alphaMap());
-			globeMaterial.set_bumpMap(this.get_bumpMap());
-			globeMaterial.set_bumpScale(this.get_bumpScale());
-			globeMaterial.set_reflectivity(this.get_reflectivity());
-			globeMaterial.set_refractionRatio(this.get_refractionRatio());
-			globeMaterial.set_shininess(this.get_shininess());
-			globeMaterial.set_emissive(this.get_emissive());
-			globeMaterial.set_specular(this.get_specular());
-			globeMaterial.set_offsetRepeatOverride(this.get_offsetRepeatOverride());
-			return globeMaterial;
-		}
-	}
-	,get_opacity_: function() {
-		return this.uniforms.opacity.value;
-	}
-	,set_opacity_: function(v) {
-		this.opacity_ = v;
-		return this.uniforms.opacity.value = v;
-	}
-	,get_diffuse: function() {
-		return this.uniforms.diffuse.value;
-	}
-	,set_diffuse: function(v) {
-		this.diffuse = v;
-		return this.uniforms.diffuse.value = v;
-	}
-	,get_map: function() {
-		return this.uniforms.map.value;
-	}
-	,set_map: function(v) {
-		if(this.get_offsetRepeatOverride() == null && v != null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
-		this.map = v;
-		return this.uniforms.map.value = v;
-	}
-	,get_specularMap: function() {
-		return this.uniforms.specularMap.value;
-	}
-	,set_specularMap: function(v) {
-		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
-		this.specularMap = v;
-		return this.uniforms.specularMap.value = v;
-	}
-	,get_normalMap: function() {
-		return this.uniforms.normalMap.value;
-	}
-	,set_normalMap: function(v) {
-		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
-		this.normalMap = v;
-		return this.uniforms.normalMap.value = v;
-	}
-	,get_normalScale: function() {
-		return this.uniforms.normalScale.value;
-	}
-	,set_normalScale: function(v) {
-		this.normalScale = v;
-		return this.uniforms.normalScale.value = v;
-	}
-	,get_bumpMap: function() {
-		return this.uniforms.bumpMap.value;
-	}
-	,set_bumpMap: function(v) {
-		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null && this.get_normalMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
-		this.bumpMap = v;
-		return this.uniforms.bumpMap.value = v;
-	}
-	,get_bumpScale: function() {
-		return this.uniforms.bumpScale.value;
-	}
-	,set_bumpScale: function(v) {
-		this.bumpScale = v;
-		return this.uniforms.bumpScale.value = v;
-	}
-	,get_alphaMap: function() {
-		return this.uniforms.alphaMap.value;
-	}
-	,set_alphaMap: function(v) {
-		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null && this.get_normalMap() == null && this.get_bumpMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
-		this.alphaMap = v;
-		return this.uniforms.alphaMap.value = v;
-	}
-	,get_reflectivity: function() {
-		return this.uniforms.reflectivity.value;
-	}
-	,set_reflectivity: function(v) {
-		this.reflectivity = v;
-		return this.uniforms.reflectivity.value = v;
-	}
-	,get_refractionRatio: function() {
-		return this.uniforms.refractionRatio.value;
-	}
-	,set_refractionRatio: function(v) {
-		this.refractionRatio = v;
-		return this.uniforms.refractionRatio.value = v;
-	}
-	,get_shininess: function() {
-		return this.uniforms.shininess.value;
-	}
-	,set_shininess: function(v) {
-		this.shininess = v;
-		return this.uniforms.shininess.value = v;
-	}
-	,get_emissive: function() {
-		return this.uniforms.emissive.value;
-	}
-	,set_emissive: function(v) {
-		this.emissive = v;
-		return this.uniforms.emissive.value = v;
-	}
-	,get_specular: function() {
-		return this.uniforms.specular.value;
-	}
-	,set_specular: function(v) {
-		this.specular = v;
-		return this.uniforms.specular.value = v;
-	}
-	,get_offsetRepeatOverride: function() {
-		return this.uniforms.offsetRepeat.value;
-	}
-	,set_offsetRepeatOverride: function(v) {
-		this.offsetRepeatOverride = v;
-		return this.uniforms.offsetRepeat.value = v;
-	}
-	,__class__: globe_GlobeMaterial
-	,__properties__: {set_offsetRepeatOverride:"set_offsetRepeatOverride",get_offsetRepeatOverride:"get_offsetRepeatOverride",set_specular:"set_specular",get_specular:"get_specular",set_emissive:"set_emissive",get_emissive:"get_emissive",set_shininess:"set_shininess",get_shininess:"get_shininess",set_refractionRatio:"set_refractionRatio",get_refractionRatio:"get_refractionRatio",set_reflectivity:"set_reflectivity",get_reflectivity:"get_reflectivity",set_bumpScale:"set_bumpScale",get_bumpScale:"get_bumpScale",set_bumpMap:"set_bumpMap",get_bumpMap:"get_bumpMap",set_alphaMap:"set_alphaMap",get_alphaMap:"get_alphaMap",set_normalScale:"set_normalScale",get_normalScale:"get_normalScale",set_normalMap:"set_normalMap",get_normalMap:"get_normalMap",set_specularMap:"set_specularMap",get_specularMap:"get_specularMap",set_map:"set_map",get_map:"get_map",set_diffuse:"set_diffuse",get_diffuse:"get_diffuse",set_opacity_:"set_opacity_",get_opacity_:"get_opacity_"}
 });
 var haxe_IMap = function() { };
 haxe_IMap.__name__ = true;
@@ -2013,6 +1765,389 @@ motion_easing_QuadEaseOut.prototype = {
 	}
 	,__class__: motion_easing_QuadEaseOut
 };
+var objects_globe_Atmosphere = function(innerRadius,outerRadius) {
+	THREE.Object3D.call(this);
+	var atmospherePrameters = { innerRadius : innerRadius, outerRadius : outerRadius, Kr : 0.0025, Km : 0.0010, ESun : 20.0, g : -0.990, wavelength : [0.650,0.570,0.475], rayleighScaleDepth : 0.25, mieScaleDepth : 0.1, nSamples : 4};
+	var atmosphereUniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.lights,{ v3InvWavelength : { type : "v3", value : new THREE.Vector3(1 / Math.pow(atmospherePrameters.wavelength[0],4),1 / Math.pow(atmospherePrameters.wavelength[1],4),1 / Math.pow(atmospherePrameters.wavelength[2],4))}, fInnerRadius : { type : "f", value : atmospherePrameters.innerRadius}, fInnerRadius2 : { type : "f", value : atmospherePrameters.innerRadius * atmospherePrameters.innerRadius}, fOuterRadius : { type : "f", value : atmospherePrameters.outerRadius}, fOuterRadius2 : { type : "f", value : atmospherePrameters.outerRadius * atmospherePrameters.outerRadius}, fKrESun : { type : "f", value : atmospherePrameters.Kr * atmospherePrameters.ESun}, fKmESun : { type : "f", value : atmospherePrameters.Km * atmospherePrameters.ESun}, fKr4PI : { type : "f", value : atmospherePrameters.Kr * 4.0 * Math.PI}, fKm4PI : { type : "f", value : atmospherePrameters.Km * 4.0 * Math.PI}, fScale : { type : "f", value : 1 / (atmospherePrameters.outerRadius - atmospherePrameters.innerRadius)}, fScaleDepth : { type : "f", value : atmospherePrameters.rayleighScaleDepth}, fScaleOverScaleDepth : { type : "f", value : 1 / (atmospherePrameters.outerRadius - atmospherePrameters.innerRadius) / atmospherePrameters.rayleighScaleDepth}, g : { type : "f", value : atmospherePrameters.g}, g2 : { type : "f", value : atmospherePrameters.g * atmospherePrameters.g}}]);
+	var defines = { nSamples : atmospherePrameters.nSamples};
+	var atmosphereGeom = new THREE.BufferGeometry().fromGeometry(new THREE.SphereGeometry(innerRadius,120,120));
+	var atmosphereOuterMaterial = new objects_globe_AtmosphereOuterMaterial({ uniforms : atmosphereUniforms, defines : defines});
+	var atmosphereOuterMesh = new THREE.Mesh(atmosphereGeom,atmosphereOuterMaterial);
+	atmosphereOuterMesh.scale.multiplyScalar(outerRadius / innerRadius);
+	var atmosphereInnerMaterial = new objects_globe_AtmosphereInnerMaterial({ uniforms : THREE.UniformsUtils.merge([atmosphereUniforms]), defines : defines});
+	var atmosphereInnerMesh = new THREE.Mesh(atmosphereGeom,atmosphereInnerMaterial);
+	atmosphereInnerMesh.renderOrder = 1;
+	this.add(atmosphereOuterMesh);
+	this.add(atmosphereInnerMesh);
+};
+objects_globe_Atmosphere.__name__ = true;
+objects_globe_Atmosphere.__super__ = THREE.Object3D;
+objects_globe_Atmosphere.prototype = $extend(THREE.Object3D.prototype,{
+	__class__: objects_globe_Atmosphere
+});
+var objects_globe_AtmosphereInnerMaterial = function(parameters) {
+	var p = parameters != null?parameters:{ };
+	p.vertexShader = p.vertexShader != null?p.vertexShader:objects_globe_AtmosphereInnerMaterial.vertexShaderStr;
+	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:objects_globe_AtmosphereInnerMaterial.fragmentShaderStr;
+	p.fog = p.fog != null && p.fog;
+	p.lights = p.lights != null?p.lights:true;
+	p.transparent = p.transparent != null?p.transparent:true;
+	p.side = p.side != null?p.side:THREE.FrontSide;
+	p.blending = THREE.AdditiveBlending;
+	THREE.ShaderMaterial.call(this,p);
+};
+objects_globe_AtmosphereInnerMaterial.__name__ = true;
+objects_globe_AtmosphereInnerMaterial.__super__ = THREE.ShaderMaterial;
+objects_globe_AtmosphereInnerMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
+	__class__: objects_globe_AtmosphereInnerMaterial
+});
+var objects_globe_AtmosphereOuterMaterial = function(parameters) {
+	var p = parameters != null?parameters:{ };
+	p.vertexShader = p.vertexShader != null?p.vertexShader:objects_globe_AtmosphereOuterMaterial.vertexShaderStr;
+	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:objects_globe_AtmosphereOuterMaterial.fragmentShaderStr;
+	p.fog = p.fog != null && p.fog;
+	p.lights = p.lights != null?p.lights:true;
+	p.transparent = p.transparent != null?p.transparent:true;
+	p.side = p.side != null?p.side:THREE.BackSide;
+	p.blending = THREE.AdditiveBlending;
+	THREE.ShaderMaterial.call(this,p);
+};
+objects_globe_AtmosphereOuterMaterial.__name__ = true;
+objects_globe_AtmosphereOuterMaterial.__super__ = THREE.ShaderMaterial;
+objects_globe_AtmosphereOuterMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
+	__class__: objects_globe_AtmosphereOuterMaterial
+});
+var objects_globe_Globe = function(radius,assetRoot) {
+	this.sunDistance = 2.0;
+	this.atmospherePad = 0.005;
+	this.atmosphereHeight = 0.05;
+	this.atmosphereEnabled = true;
+	this.tilt = 23.4;
+	this.radius = radius;
+	THREE.Object3D.call(this);
+	var colorTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/color-1_high.jpg");
+	var normalTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/normal-1_high.jpg");
+	var specTex = THREE.ImageUtils.loadTexture("" + assetRoot + "/earth/specular-1_low.png");
+	colorTex.anisotropy = 4;
+	this.earthContainer = new THREE.Object3D();
+	this.earthContainer.rotateZ(-THREE.Math.degToRad(this.tilt));
+	this.add(this.earthContainer);
+	var earthGeom = new THREE.BufferGeometry().fromGeometry(new THREE.SphereGeometry(radius,80,80));
+	var globeMat = new objects_globe_GlobeMaterial({ map : colorTex, normalMap : normalTex, normalScale : new THREE.Vector3(1.0,1.0,1.0), specularMap : specTex, specular : new THREE.Color(3355443), shininess : 12, wireframe : false});
+	this.earthMesh = new THREE.Mesh(earthGeom,globeMat);
+	this.earthContainer.add(this.earthMesh);
+	if(this.atmosphereEnabled) {
+		this.atmosphere = new objects_globe_Atmosphere(radius * (1 + this.atmospherePad),radius * (this.atmosphereHeight + 1));
+		this.earthContainer.add(this.atmosphere);
+	}
+	this.sun = new THREE.DirectionalLight(16774642,1.0);
+	this.sun.position.set(0,0,radius * 2);
+	this.sun.target.position.set(0,0,0);
+	this.add(this.sun);
+	this.earthMesh.rotation.y = 0;
+	if(this.atmosphereEnabled) this.atmosphere.rotation.y = 0;
+	this.sun.position.set(Math.sin(0) * this.sunDistance,0,Math.cos(0) * this.sunDistance);
+};
+objects_globe_Globe.__name__ = true;
+objects_globe_Globe.__super__ = THREE.Object3D;
+objects_globe_Globe.prototype = $extend(THREE.Object3D.prototype,{
+	geoToWorld: function(c,v) {
+		var local = this.geoToLocal(c,v);
+		return this.earthMesh.localToWorld(local);
+	}
+	,geoToLocal: function(c,v) {
+		if(v == null) v = new THREE.Vector3();
+		var latRad = THREE.Math.degToRad(c.lat);
+		var longRad = THREE.Math.degToRad(c["long"]);
+		var r = this.radius + c.alt * this.radius;
+		v.x = r * Math.cos(latRad) * Math.cos(longRad);
+		v.z = r * Math.cos(latRad) * Math.sin(longRad);
+		v.y = r * Math.sin(latRad);
+		return v;
+	}
+	,worldToGeo: function(p,c) {
+		return this.localToGeo(this.earthMesh.worldToLocal(p),c);
+	}
+	,localToGeo: function(p,c) {
+		if(c == null) c = new objects_globe_GeoCoord();
+		var r = p.length();
+		c.alt = r * this.radius - this.radius;
+		c.lat = THREE.Math.radToDeg(Math.asin(p.y / r));
+		c["long"] = THREE.Math.radToDeg(Math.atan2(p.z,p.x));
+		return c;
+	}
+	,addMarker: function(c) {
+		var local = this.geoToLocal(c);
+		var markerSphere = new THREE.SphereGeometry(0.01,10,10);
+		var marker = new THREE.Mesh(markerSphere,new THREE.MeshNormalMaterial());
+		marker.position.copy(local);
+		this.earthMesh.add(marker);
+		local.clone().normalize().multiplyScalar(this.radius);
+		var arrow = new THREE.ArrowHelper(local.clone().normalize(),new THREE.Vector3(0,0,0),c.alt + 0.1,16711680);
+		marker.add(arrow);
+		return marker;
+	}
+	,get_earthAngle: function() {
+		return this.earthMesh.rotation.y;
+	}
+	,set_earthAngle: function(v) {
+		this.earthMesh.rotation.y = v;
+		if(this.atmosphereEnabled) this.atmosphere.rotation.y = v;
+		return v;
+	}
+	,get_sunAngle: function() {
+		return Math.atan2(this.sun.position.x,this.sun.position.z);
+	}
+	,set_sunAngle: function(v) {
+		this.sun.position.set(Math.sin(v) * this.sunDistance,0,Math.cos(v) * this.sunDistance);
+		return v;
+	}
+	,get_atmosphereGap: function() {
+		return this.radius * this.atmospherePad;
+	}
+	,__class__: objects_globe_Globe
+	,__properties__: {get_atmosphereGap:"get_atmosphereGap",set_sunAngle:"set_sunAngle",get_sunAngle:"get_sunAngle",set_earthAngle:"set_earthAngle",get_earthAngle:"get_earthAngle"}
+});
+var objects_globe_GlobeMaterial = function(parameters) {
+	var p = parameters != null?parameters:{ };
+	p.uniforms = p.uniforms != null?p.uniforms:THREE.UniformsUtils.merge([THREE.UniformsLib.common,THREE.UniformsLib.bump,THREE.UniformsLib.normalmap,THREE.UniformsLib.lights,{ 'emissive' : { type : "c", value : new THREE.Color(0)}, 'specular' : { type : "c", value : new THREE.Color(1118481)}, 'shininess' : { type : "f", value : 30}, 'wrapRGB' : { type : "v3", value : new THREE.Vector3(1,1,1)}}]);
+	p.vertexShader = p.vertexShader != null?p.vertexShader:objects_globe_GlobeMaterial.vertexShaderStr;
+	p.fragmentShader = p.fragmentShader != null?p.fragmentShader:objects_globe_GlobeMaterial.fragmentShaderStr;
+	p.fog = p.fog != null && p.fog;
+	p.lights = p.lights != null?p.lights:true;
+	THREE.ShaderMaterial.call(this,{ });
+	this.uniforms = p.uniforms;
+	this.vertexShader = p.vertexShader;
+	this.fragmentShader = p.fragmentShader;
+	this.fog = p.fog;
+	this.lights = p.lights;
+	this.set_opacity_(p.opacity_ != null?p.opacity_:this.get_opacity_());
+	this.set_diffuse(p.diffuse != null?p.diffuse:this.get_diffuse());
+	this.set_map(p.map != null?p.map:this.get_map());
+	this.set_specularMap(p.specularMap != null?p.specularMap:this.get_specularMap());
+	this.set_normalMap(p.normalMap != null?p.normalMap:this.get_normalMap());
+	this.set_normalScale(p.normalScale != null?p.normalScale:this.get_normalScale());
+	this.set_alphaMap(p.alphaMap != null?p.alphaMap:this.get_alphaMap());
+	this.set_bumpMap(p.bumpMap != null?p.bumpMap:this.get_bumpMap());
+	this.set_bumpScale(p.bumpScale != null?p.bumpScale:this.get_bumpScale());
+	this.set_reflectivity(p.reflectivity != null?p.reflectivity:this.get_reflectivity());
+	this.set_refractionRatio(p.refractionRatio != null?p.refractionRatio:this.get_refractionRatio());
+	this.set_shininess(p.shininess != null?p.shininess:this.get_shininess());
+	this.set_emissive(p.emissive != null?p.emissive:this.get_emissive());
+	this.set_specular(p.specular != null?p.specular:this.get_specular());
+	this.set_offsetRepeatOverride(p.offsetRepeatOverride != null?p.offsetRepeatOverride:this.get_offsetRepeatOverride());
+};
+objects_globe_GlobeMaterial.__name__ = true;
+objects_globe_GlobeMaterial.__super__ = THREE.ShaderMaterial;
+objects_globe_GlobeMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
+	clone: function(material) {
+		if(material != null) return THREE.ShaderMaterial.prototype.clone.call(this,material); else {
+			var globeMaterial = new objects_globe_GlobeMaterial();
+			THREE.ShaderMaterial.prototype.clone.call(this,globeMaterial);
+			globeMaterial.fragmentShader = this.fragmentShader;
+			globeMaterial.vertexShader = this.vertexShader;
+			globeMaterial.uniforms = THREE.UniformsUtils.clone(this.uniforms);
+			globeMaterial.defines = this.defines;
+			globeMaterial.shading = this.shading;
+			globeMaterial.wireframe = this.wireframe;
+			globeMaterial.wireframeLinewidth = this.wireframeLinewidth;
+			globeMaterial.fog = this.fog;
+			globeMaterial.lights = this.lights;
+			globeMaterial.vertexColors = this.vertexColors;
+			globeMaterial.skinning = this.skinning;
+			globeMaterial.morphTargets = this.morphTargets;
+			globeMaterial.morphNormals = this.morphNormals;
+			globeMaterial.set_opacity_(this.get_opacity_());
+			globeMaterial.set_diffuse(this.get_diffuse());
+			globeMaterial.set_map(this.get_map());
+			globeMaterial.set_specularMap(this.get_specularMap());
+			globeMaterial.set_normalMap(this.get_normalMap());
+			globeMaterial.set_normalScale(this.get_normalScale());
+			globeMaterial.set_alphaMap(this.get_alphaMap());
+			globeMaterial.set_bumpMap(this.get_bumpMap());
+			globeMaterial.set_bumpScale(this.get_bumpScale());
+			globeMaterial.set_reflectivity(this.get_reflectivity());
+			globeMaterial.set_refractionRatio(this.get_refractionRatio());
+			globeMaterial.set_shininess(this.get_shininess());
+			globeMaterial.set_emissive(this.get_emissive());
+			globeMaterial.set_specular(this.get_specular());
+			globeMaterial.set_offsetRepeatOverride(this.get_offsetRepeatOverride());
+			return globeMaterial;
+		}
+	}
+	,get_opacity_: function() {
+		return this.uniforms.opacity.value;
+	}
+	,set_opacity_: function(v) {
+		this.opacity_ = v;
+		return this.uniforms.opacity.value = v;
+	}
+	,get_diffuse: function() {
+		return this.uniforms.diffuse.value;
+	}
+	,set_diffuse: function(v) {
+		this.diffuse = v;
+		return this.uniforms.diffuse.value = v;
+	}
+	,get_map: function() {
+		return this.uniforms.map.value;
+	}
+	,set_map: function(v) {
+		if(this.get_offsetRepeatOverride() == null && v != null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
+		this.map = v;
+		return this.uniforms.map.value = v;
+	}
+	,get_specularMap: function() {
+		return this.uniforms.specularMap.value;
+	}
+	,set_specularMap: function(v) {
+		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
+		this.specularMap = v;
+		return this.uniforms.specularMap.value = v;
+	}
+	,get_normalMap: function() {
+		return this.uniforms.normalMap.value;
+	}
+	,set_normalMap: function(v) {
+		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
+		this.normalMap = v;
+		return this.uniforms.normalMap.value = v;
+	}
+	,get_normalScale: function() {
+		return this.uniforms.normalScale.value;
+	}
+	,set_normalScale: function(v) {
+		this.normalScale = v;
+		return this.uniforms.normalScale.value = v;
+	}
+	,get_bumpMap: function() {
+		return this.uniforms.bumpMap.value;
+	}
+	,set_bumpMap: function(v) {
+		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null && this.get_normalMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
+		this.bumpMap = v;
+		return this.uniforms.bumpMap.value = v;
+	}
+	,get_bumpScale: function() {
+		return this.uniforms.bumpScale.value;
+	}
+	,set_bumpScale: function(v) {
+		this.bumpScale = v;
+		return this.uniforms.bumpScale.value = v;
+	}
+	,get_alphaMap: function() {
+		return this.uniforms.alphaMap.value;
+	}
+	,set_alphaMap: function(v) {
+		if(this.get_offsetRepeatOverride() == null && v != null && this.get_map() == null && this.get_specularMap() == null && this.get_normalMap() == null && this.get_bumpMap() == null) this.uniforms.offsetRepeat.value.set(v.offset.x,v.offset.y,v.repeat.x,v.repeat.y);
+		this.alphaMap = v;
+		return this.uniforms.alphaMap.value = v;
+	}
+	,get_reflectivity: function() {
+		return this.uniforms.reflectivity.value;
+	}
+	,set_reflectivity: function(v) {
+		this.reflectivity = v;
+		return this.uniforms.reflectivity.value = v;
+	}
+	,get_refractionRatio: function() {
+		return this.uniforms.refractionRatio.value;
+	}
+	,set_refractionRatio: function(v) {
+		this.refractionRatio = v;
+		return this.uniforms.refractionRatio.value = v;
+	}
+	,get_shininess: function() {
+		return this.uniforms.shininess.value;
+	}
+	,set_shininess: function(v) {
+		this.shininess = v;
+		return this.uniforms.shininess.value = v;
+	}
+	,get_emissive: function() {
+		return this.uniforms.emissive.value;
+	}
+	,set_emissive: function(v) {
+		this.emissive = v;
+		return this.uniforms.emissive.value = v;
+	}
+	,get_specular: function() {
+		return this.uniforms.specular.value;
+	}
+	,set_specular: function(v) {
+		this.specular = v;
+		return this.uniforms.specular.value = v;
+	}
+	,get_offsetRepeatOverride: function() {
+		return this.uniforms.offsetRepeat.value;
+	}
+	,set_offsetRepeatOverride: function(v) {
+		this.offsetRepeatOverride = v;
+		return this.uniforms.offsetRepeat.value = v;
+	}
+	,__class__: objects_globe_GlobeMaterial
+	,__properties__: {set_offsetRepeatOverride:"set_offsetRepeatOverride",get_offsetRepeatOverride:"get_offsetRepeatOverride",set_specular:"set_specular",get_specular:"get_specular",set_emissive:"set_emissive",get_emissive:"get_emissive",set_shininess:"set_shininess",get_shininess:"get_shininess",set_refractionRatio:"set_refractionRatio",get_refractionRatio:"get_refractionRatio",set_reflectivity:"set_reflectivity",get_reflectivity:"get_reflectivity",set_bumpScale:"set_bumpScale",get_bumpScale:"get_bumpScale",set_bumpMap:"set_bumpMap",get_bumpMap:"get_bumpMap",set_alphaMap:"set_alphaMap",get_alphaMap:"get_alphaMap",set_normalScale:"set_normalScale",get_normalScale:"get_normalScale",set_normalMap:"set_normalMap",get_normalMap:"get_normalMap",set_specularMap:"set_specularMap",get_specularMap:"get_specularMap",set_map:"set_map",get_map:"get_map",set_diffuse:"set_diffuse",get_diffuse:"get_diffuse",set_opacity_:"set_opacity_",get_opacity_:"get_opacity_"}
+});
+var objects_migration_MigrationPath = function(globe,geoPoints,segments) {
+	if(segments == null) segments = 300;
+	var worldPoints = [];
+	var _g = 0;
+	while(_g < geoPoints.length) {
+		var gc = geoPoints[_g];
+		++_g;
+		gc.alt = globe.radius * globe.atmospherePad * .5;
+		worldPoints.push(globe.geoToLocal(gc));
+	}
+	this.spline = new THREE.SplineCurve3(worldPoints);
+	var sphereNormal = function(u,t,p,tan,curve) {
+		return p;
+	};
+	this.ribbonGeom = new geometry_RibbonGeometry(this.spline,function(u1,t1) {
+		return 0.015 * globe.radius;
+	},sphereNormal,segments,1);
+	this.migrationMaterial = new objects_migration_MigrationPathMaterial();
+	THREE.Mesh.call(this,this.ribbonGeom,this.migrationMaterial);
+};
+objects_migration_MigrationPath.__name__ = true;
+objects_migration_MigrationPath.__super__ = THREE.Mesh;
+objects_migration_MigrationPath.prototype = $extend(THREE.Mesh.prototype,{
+	get_fraction: function() {
+		return this.ribbonGeom.curveFraction;
+	}
+	,set_fraction: function(v) {
+		return this.ribbonGeom.set_curveFraction(v);
+	}
+	,get_offset: function() {
+		return this.migrationMaterial.uniforms.offset.value;
+	}
+	,set_offset: function(v) {
+		return this.migrationMaterial.uniforms.offset.value = v;
+	}
+	,get_lengthScale: function() {
+		return this.migrationMaterial.uniforms.lengthScale.value;
+	}
+	,set_lengthScale: function(v) {
+		return this.migrationMaterial.uniforms.lengthScale.value = v;
+	}
+	,__class__: objects_migration_MigrationPath
+	,__properties__: {set_fraction:"set_fraction",get_fraction:"get_fraction",set_lengthScale:"set_lengthScale",get_lengthScale:"get_lengthScale",set_offset:"set_offset",get_offset:"get_offset"}
+});
+var objects_migration_MigrationPathMaterial = function(parameters) {
+	if(parameters != null) parameters; else { };
+	var shaderMaterialParameters = { vertexShader : objects_migration_MigrationPathMaterial.vertexShaderStr, fragmentShader : objects_migration_MigrationPathMaterial.fragmentShaderStr, uniforms : THREE.UniformsUtils.merge([THREE.UniformsLib.common,{ offset : { type : "f", value : 0}, lengthScale : { type : "f", value : 1}}])};
+	shaderMaterialParameters.transparent = true;
+	shaderMaterialParameters.blending = THREE.CustomBlending;
+	shaderMaterialParameters.blendEquation = THREE.AddEquation;
+	shaderMaterialParameters.blendSrc = THREE.OneFactor;
+	shaderMaterialParameters.blendDst = THREE.OneMinusSrcAlphaFactor;
+	shaderMaterialParameters.depthWrite = false;
+	THREE.ShaderMaterial.call(this,shaderMaterialParameters);
+};
+objects_migration_MigrationPathMaterial.__name__ = true;
+objects_migration_MigrationPathMaterial.__super__ = THREE.ShaderMaterial;
+objects_migration_MigrationPathMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
+	__class__: objects_migration_MigrationPathMaterial
+});
 var $_, $fid = 0;
 function $bind(o,m) { if( m == null ) return null; if( m.__id__ == null ) m.__id__ = $fid++; var f; if( o.hx__closures__ == null ) o.hx__closures__ = {}; else f = o.hx__closures__[m.__id__]; if( f == null ) { f = function(){ return f.method.apply(f.scope, arguments); }; f.scope = o; f.method = m; o.hx__closures__[m.__id__] = f; } return f; }
 String.prototype.__class__ = String;
@@ -2029,18 +2164,11 @@ Bool.__ename__ = ["Bool"];
 var Class = { __name__ : ["Class"]};
 var Enum = { };
 var __map_reserved = {}
-Locations.london = new globe_GeoCoord(51.5072,0.1275);
-Locations.san_francisco = new globe_GeoCoord(37.7833,122.4167);
-Locations.great_barrier_reef = new globe_GeoCoord(-18.2861,-147.7000);
-Main.globeRadius = 1;
-globe_Atmosphere.atmosphereSegments = 120;
-globe_AtmosphereInnerMaterial.vertexShaderStr = "//\n// Atmospheric scattering vertex shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform vec3 v3InvWavelength;\t// 1 / pow(wavelength, 4) for the red, green, and blue channels\nuniform float fOuterRadius;\t\t// The outer (atmosphere) radius\nuniform float fOuterRadius2;\t// fOuterRadius^2\nuniform float fInnerRadius;\t\t// The inner (planetary) radius\nuniform float fInnerRadius2;\t// fInnerRadius^2\nuniform float fKrESun;\t\t\t// Kr * ESun\nuniform float fKmESun;\t\t\t// Km * ESun\nuniform float fKr4PI;\t\t\t// Kr * 4 * PI\nuniform float fKm4PI;\t\t\t// Km * 4 * PI\nuniform float fScale;\t\t\t// 1 / (fOuterRadius - fInnerRadius)\nuniform float fScaleDepth;\t\t// The scale depth (i.e. the altitude at which the atmosphere's average density is found)\nuniform float fScaleOverScaleDepth;\t// fScale / fScaleDepth\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n#ifdef GROUND_TEXTURES\nvarying vec2 vUv;\n#endif\n\nconst float fSamples = float(nSamples);//nSamples provided in prepended define\n\nfloat scale(float fCos)\n{\n\tfloat x = 1.0 - fCos;\n\treturn fScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));\n}\n\nvoid main(void)\n{\n\t#ifdef GROUND_TEXTURES\n\tvUv = uv;\n\t#endif\n\n\n\t//get values from three.js\n\t//@! doesn't currently handle glancing camera angles\n\tvec3 v3LightDir = directionalLightDirection[0];\n\tvec3 v3VertPos = (modelMatrix * vec4(position, 1.)).xyz;//world coordinates\n\tvec3 v3CameraPos = cameraPosition;\n\n\tfloat fCameraHeight = length(v3CameraPos);\n\tfloat fCameraHeight2 = fCameraHeight * fCameraHeight;\n\n\t// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)\n\tvec3 v3Ray = v3VertPos - v3CameraPos;\n\tfloat fFar = length(v3Ray);\n\tv3Ray /= fFar;\n\n\t// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)\n\tfloat B = 2.0 * dot(v3CameraPos, v3Ray);\n\tfloat C = fCameraHeight2 - fOuterRadius2;\n\tfloat fDet = max(0.0, B*B - 4.0 * C);\n\tfloat fNear = 0.5 * (-B - sqrt(fDet));\n\n\t// Calculate the ray's starting position, then calculate its scattering offset\n\tvec3 v3Start = v3CameraPos + v3Ray * fNear;\n\tfFar -= fNear;\n\tfloat fDepth = exp((fInnerRadius - fOuterRadius) / fScaleDepth);\n\tfloat fCameraAngle = dot(-v3Ray, v3VertPos) / length(v3VertPos);\n\tfloat fLightAngle = dot(v3LightDir, v3VertPos) / length(v3VertPos);\n\tfloat fCameraScale = scale(fCameraAngle);\n\tfloat fLightScale = scale(fLightAngle);\n\tfloat fCameraOffset = fDepth*fCameraScale;\n\tfloat fTemp = (fLightScale + fCameraScale);\n\n\t// Initialize the scattering loop variables\n\tfloat fSampleLength = fFar / fSamples;\n\tfloat fScaledLength = fSampleLength * fScale;\n\tvec3 v3SampleRay = v3Ray * fSampleLength;\n\tvec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;\n\n\t// Now loop through the sample rays\n\tvec3 v3FrontColor = vec3(0.0, 0.0, 0.0);\n\tvec3 v3Attenuate;\n\tfor(int i=0; i<nSamples; i++)\n\t{\n\t\tfloat fHeight = length(v3SamplePoint);\n\t\tfloat fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));\n\t\tfloat fScatter = fDepth*fTemp - fCameraOffset;\n\t\tv3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));\n\t\tv3FrontColor += v3Attenuate * (fDepth * fScaledLength);\n\t\tv3SamplePoint += v3SampleRay;\n\t}\n\n\t// Atmosphere calculations output:\n\tfrontColor = vec4(v3FrontColor * (v3InvWavelength * fKrESun + fKmESun), 1.0);\n\t// Calculate the attenuation factor for the ground\n\tsecondaryColor = vec4(v3Attenuate, 1.0);\n\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n}\n";
-globe_AtmosphereInnerMaterial.fragmentShaderStr = "//\n// Atmospheric scattering fragment shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\n#ifdef GROUND_TEXTURES\nuniform sampler2D threeTextureBug;\nvarying vec2 vUv;\n#endif\n\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n\nvoid main (void)\n{\n\t#ifdef GROUND_TEXTURES\n\tgl_FragColor = frontColor + texture2D(threeTextureBug, vUv) * secondaryColor;\n\t#else\n\t// gl_FragColor = frontColor*0.5 + mix(frontColor, secondaryColor*0.25, 0.5) + .0 * secondaryColor;\n\tgl_FragColor = frontColor*0.95 + .1 * secondaryColor;\n\t#endif\n}\n";
-globe_AtmosphereOuterMaterial.vertexShaderStr = "//\n// Atmospheric scattering vertex shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform vec3 v3InvWavelength;\t// 1 / pow(wavelength, 4) for the red, green, and blue channels\nuniform float fOuterRadius;\t\t// The outer (atmosphere) radius\nuniform float fOuterRadius2;\t// fOuterRadius^2\nuniform float fInnerRadius;\t\t// The inner (planetary) radius\nuniform float fInnerRadius2;\t// fInnerRadius^2\nuniform float fKrESun;\t\t\t// Kr * ESun\nuniform float fKmESun;\t\t\t// Km * ESun\nuniform float fKr4PI;\t\t\t// Kr * 4 * PI\nuniform float fKm4PI;\t\t\t// Km * 4 * PI\nuniform float fScale;\t\t\t// 1 / (fOuterRadius - fInnerRadius)\nuniform float fScaleDepth;\t\t// The scale depth (i.e. the altitude at which the atmosphere's average density is found)\nuniform float fScaleOverScaleDepth;\t// fScale / fScaleDepth\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvarying vec3 v3Direction;\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\nconst float fSamples = float(nSamples);//nSamples provided in prepended define\n\nfloat scale(float fCos)\n{\n\tfloat x = 1.0 - fCos;\n\treturn fScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));\n}\n\nvoid main(void)\n{\t\n\t//get values from three.js\n\t//@! doesn't currently handle glancing camera angles\n\tvec3 v3LightDir = directionalLightDirection[0];\n\tvec3 v3VertPos = (modelMatrix * vec4(position, 1.)).xyz;//world coordinates\n\tvec3 v3CameraPos = cameraPosition;\n\n\tfloat fCameraHeight = length(v3CameraPos);\n\tfloat fCameraHeight2 = fCameraHeight * fCameraHeight;\n\n\t// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)\n\tvec3 v3Ray = v3VertPos - v3CameraPos;\n\tfloat fFar = length(v3Ray);\n\tv3Ray /= fFar;\n\n\t// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)\n\tfloat B = 2.0 * dot(v3CameraPos, v3Ray);\n\tfloat C = fCameraHeight2 - fOuterRadius2;\n\tfloat fDet = max(0.0, B*B - 4.0 * C);\n\tfloat fNear = 0.5 * (-B - sqrt(fDet));\n\n\t// Calculate the ray's starting position, then calculate its scattering offset\n\tvec3 v3Start = v3CameraPos + v3Ray * fNear;\n\tfFar -= fNear;\n\tfloat fStartAngle = dot(v3Ray, v3Start) / fOuterRadius;\n\tfloat fStartDepth = exp(-1.0 / fScaleDepth);\n\tfloat fStartOffset = fStartDepth * scale(fStartAngle);\n\n\t// Initialize the scattering loop variables\n\tfloat fSampleLength = fFar / fSamples;\n\tfloat fScaledLength = fSampleLength * fScale;\n\tvec3 v3SampleRay = v3Ray * fSampleLength;\n\tvec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;\n\n\t// Now loop through the sample rays\n\tvec3 v3FrontColor = vec3(0.0, 0.0, 0.0);\n\tfor(int i=0; i<nSamples; i++)\n\t{\n\t\tfloat fHeight = length(v3SamplePoint);\n\t\tfloat fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));\n\t\tfloat fLightAngle = dot(v3LightDir, v3SamplePoint) / fHeight;\n\t\tfloat fCameraAngle = dot(v3Ray, v3SamplePoint) / fHeight;\n\t\tfloat fScatter = (fStartOffset + fDepth * (scale(fLightAngle) - scale(fCameraAngle)));\n\t\tvec3 v3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));\n\n\t\tv3FrontColor += v3Attenuate * (fDepth * fScaledLength);\n\t\tv3SamplePoint += v3SampleRay;\n\t}\n\n\t// Finally, scale the Mie and Rayleigh colors and set up the varying variables for the pixel shader\n\tsecondaryColor = vec4(v3FrontColor * fKmESun, 1.0);\n\tfrontColor = vec4(v3FrontColor * (v3InvWavelength * fKrESun), 1.0);\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n\tv3Direction = v3CameraPos - v3VertPos;\n}";
-globe_AtmosphereOuterMaterial.fragmentShaderStr = "//\n// Atmospheric scattering fragment shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform float g;\nuniform float g2;\n\nvarying vec3 v3Direction;\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvoid main (void)\n{\n\tvec3 v3LightDir = directionalLightDirection[0];\n\n\tfloat fCos = dot(v3LightDir, v3Direction) / length(v3Direction);\n\tfloat fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCos*fCos) / pow(1.0 + g2 - 2.0*g*fCos, 1.5);\n\tgl_FragColor = frontColor + fMiePhase * secondaryColor;\n\tgl_FragColor.a = gl_FragColor.b;\n}";
-globe_Globe.earthSegments = 80;
-globe_GlobeMaterial.vertexShaderStr = "#define PHONG\nvarying vec3 vViewPosition;\n#ifndef FLAT_SHADED\n\tvarying vec3 vNormal;\n#endif\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_vertex\n" + THREE.ShaderChunk.map_pars_vertex + "\n\nvoid main() {\n\n\t//ShaderChunk.map_vertex\n\t" + THREE.ShaderChunk.map_vertex + "\n\n\t//ShaderChunk.defaultnormal_vertex\n\t" + THREE.ShaderChunk.defaultnormal_vertex + "\n\n\t#ifndef FLAT_SHADED // Normal computed with derivatives when FLAT_SHADED\n\t\tvNormal = normalize( transformedNormal );\n\t#endif\n\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n\n\tvViewPosition = -mvPosition.xyz;\n\n}";
-globe_GlobeMaterial.fragmentShaderStr = "#define PHONG\n\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform vec3 specular;\nuniform float shininess;\nuniform float opacity;\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_fragment\n" + THREE.ShaderChunk.map_pars_fragment + "\n//ShaderChunk.alphamap_pars_fragment\n" + THREE.ShaderChunk.alphamap_pars_fragment + "\n//ShaderChunk.lights_phong_pars_fragment\n" + THREE.ShaderChunk.lights_phong_pars_fragment + "\n//ShaderChunk.bumpmap_pars_fragment\n" + THREE.ShaderChunk.bumpmap_pars_fragment + "\n//ShaderChunk.normalmap_pars_fragment\n" + THREE.ShaderChunk.normalmap_pars_fragment + "\n//ShaderChunk.specularmap_pars_fragment\n" + THREE.ShaderChunk.specularmap_pars_fragment + "\n\nvoid main() {\n\n\tvec3 outgoingLight = vec3( 0.0 );\t// outgoing light does not have an alpha, the surface does\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\n\t//ShaderChunk.map_fragment\n\t" + THREE.ShaderChunk.map_fragment + "\n\t//ShaderChunk.alphamap_fragment\n\t" + THREE.ShaderChunk.alphamap_fragment + "\n\t//ShaderChunk.alphatest_fragment\n\t" + THREE.ShaderChunk.alphatest_fragment + "\n\t//ShaderChunk.specularmap_fragment\n\t" + THREE.ShaderChunk.specularmap_fragment + "\n\n\t//ShaderChunk.lights_phong_fragment\n\t#ifndef FLAT_SHADED\n\t\tvec3 normal = normalize( vNormal );\n\t\t#ifdef DOUBLE_SIDED\n\t\t\tnormal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );\n\t\t#endif\n\t#else\n\t\tvec3 fdx = dFdx( vViewPosition );\n\t\tvec3 fdy = dFdy( vViewPosition );\n\t\tvec3 normal = normalize( cross( fdx, fdy ) );\n\t#endif\n\n\tvec3 viewPosition = normalize( vViewPosition );\n\n\t#ifdef USE_NORMALMAP\n\t\tnormal = perturbNormal2Arb( -vViewPosition, normal );\n\t#elif defined( USE_BUMPMAP )\n\t\tnormal = perturbNormalArb( -vViewPosition, normal, dHdxy_fwd() );\n\t#endif\n\n\tvec3 totalDiffuseLight = vec3( 0.0 );\n\tvec3 totalSpecularLight = vec3( 0.0 );\n\n\t#if MAX_DIR_LIGHTS > 0\n\t \tfor( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {\n\t \n\t \t\tvec3 dirVector = transformDirection( directionalLightDirection[ i ], viewMatrix );\n\t \n\t \t\t// diffuse\n\t \t\tfloat dotProduct = dot( normal, dirVector );\n\n\n\t \t\t//@! phong backside hack\n\t \t\t#define WRAP_AROUND\n\t \t\tvec3 wrapRGB = vec3(1.0, 125./255., 18./255.);\n\t \t\tfloat backsideAmbience = 0.08;\n\t \n\t \t\t#ifdef WRAP_AROUND\n\t \t\t\t//@! doubled dot products\n\t \t\t\tfloat dirDiffuseWeightFull = max( dotProduct, 0.0 );\n\t \t\t\tfloat dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );\n\t \t\t\tvec3 dirDiffuseWeight = mix( vec3( dirDiffuseWeightFull ), vec3( dirDiffuseWeightHalf ), wrapRGB*0.4 + dotProduct*1.2 ) + wrapRGB * backsideAmbience;\n\t \t\t#else\n\t \t\t\tfloat dirDiffuseWeight = max( dotProduct, 0.0 );\n\t \t\t#endif\n\t \n\t \t\ttotalDiffuseLight += directionalLightColor[ i ] * dirDiffuseWeight;\n\t \n\t \t\t// specular\n\t \t\tvec3 dirHalfVector = normalize( dirVector + viewPosition );\n\t \t\tfloat dirDotNormalHalf = max( dot( normal, dirHalfVector ), 0.0 );\n\t \t\tfloat dirSpecularWeight = specularStrength * max( pow( dirDotNormalHalf, shininess ), 0.0 );\t \n\t \t\tfloat specularNormalization = ( shininess + 2.0 ) / 8.0;\n\n\t \t\tvec3 schlick = specular + vec3( 1.0 - specular ) * pow( max( 1.0 - dot( dirVector, dirHalfVector ), 0.0 ), 5.0 );\n\t \t\ttotalSpecularLight += schlick * directionalLightColor[ i ] * dirSpecularWeight * dirDiffuseWeight * specularNormalization;\n\t \t}\n\t#endif\n\n\toutgoingLight += diffuseColor.rgb * ( totalDiffuseLight + ambientLightColor ) + totalSpecularLight + emissive;\n\n\t//ShaderChunk.linear_to_gamma_fragment\n\t" + THREE.ShaderChunk.linear_to_gamma_fragment + "\n\n\tgl_FragColor = vec4( outgoingLight, diffuseColor.a );\t// TODO, this should be pre-multiplied to allow for bright highlights on very transparent objects\n\n}";
+objects_globe_GeoCoord.EARTH_RADIUS_M = 6378100;
+Locations.london = new objects_globe_GeoCoord(51.5072,0.1275);
+Locations.san_francisco = new objects_globe_GeoCoord(37.7833,122.4167);
+Locations.great_barrier_reef = new objects_globe_GeoCoord(-18.2861,-147.7000);
+Main.globeRadius = 1.0;
 haxe_ds_ObjectMap.count = 0;
 js_Boot.__toStr = {}.toString;
 motion_actuators_SimpleActuator.actuators = [];
@@ -2049,5 +2177,15 @@ motion_actuators_SimpleActuator.addedEvent = false;
 motion_Actuate.defaultActuator = motion_actuators_SimpleActuator;
 motion_Actuate.defaultEase = motion_easing_Expo.get_easeOut();
 motion_Actuate.targetLibraries = new haxe_ds_ObjectMap();
+objects_globe_Atmosphere.atmosphereSegments = 120;
+objects_globe_AtmosphereInnerMaterial.vertexShaderStr = "//\n// Atmospheric scattering vertex shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform vec3 v3InvWavelength;\t// 1 / pow(wavelength, 4) for the red, green, and blue channels\nuniform float fOuterRadius;\t\t// The outer (atmosphere) radius\nuniform float fOuterRadius2;\t// fOuterRadius^2\nuniform float fInnerRadius;\t\t// The inner (planetary) radius\nuniform float fInnerRadius2;\t// fInnerRadius^2\nuniform float fKrESun;\t\t\t// Kr * ESun\nuniform float fKmESun;\t\t\t// Km * ESun\nuniform float fKr4PI;\t\t\t// Kr * 4 * PI\nuniform float fKm4PI;\t\t\t// Km * 4 * PI\nuniform float fScale;\t\t\t// 1 / (fOuterRadius - fInnerRadius)\nuniform float fScaleDepth;\t\t// The scale depth (i.e. the altitude at which the atmosphere's average density is found)\nuniform float fScaleOverScaleDepth;\t// fScale / fScaleDepth\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n#ifdef GROUND_TEXTURES\nvarying vec2 vUv;\n#endif\n\nconst float fSamples = float(nSamples);//nSamples provided in prepended define\n\nfloat scale(float fCos)\n{\n\tfloat x = 1.0 - fCos;\n\treturn fScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));\n}\n\nvoid main(void)\n{\n\t#ifdef GROUND_TEXTURES\n\tvUv = uv;\n\t#endif\n\n\n\t//get values from three.js\n\t//@! doesn't currently handle glancing camera angles\n\tvec3 v3LightDir = directionalLightDirection[0];\n\tvec3 v3VertPos = (modelMatrix * vec4(position, 1.)).xyz;//world coordinates\n\tvec3 v3CameraPos = cameraPosition;\n\n\tfloat fCameraHeight = length(v3CameraPos);\n\tfloat fCameraHeight2 = fCameraHeight * fCameraHeight;\n\n\t// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)\n\tvec3 v3Ray = v3VertPos - v3CameraPos;\n\tfloat fFar = length(v3Ray);\n\tv3Ray /= fFar;\n\n\t// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)\n\tfloat B = 2.0 * dot(v3CameraPos, v3Ray);\n\tfloat C = fCameraHeight2 - fOuterRadius2;\n\tfloat fDet = max(0.0, B*B - 4.0 * C);\n\tfloat fNear = 0.5 * (-B - sqrt(fDet));\n\n\t// Calculate the ray's starting position, then calculate its scattering offset\n\tvec3 v3Start = v3CameraPos + v3Ray * fNear;\n\tfFar -= fNear;\n\tfloat fDepth = exp((fInnerRadius - fOuterRadius) / fScaleDepth);\n\tfloat fCameraAngle = dot(-v3Ray, v3VertPos) / length(v3VertPos);\n\tfloat fLightAngle = dot(v3LightDir, v3VertPos) / length(v3VertPos);\n\tfloat fCameraScale = scale(fCameraAngle);\n\tfloat fLightScale = scale(fLightAngle);\n\tfloat fCameraOffset = fDepth*fCameraScale;\n\tfloat fTemp = (fLightScale + fCameraScale);\n\n\t// Initialize the scattering loop variables\n\tfloat fSampleLength = fFar / fSamples;\n\tfloat fScaledLength = fSampleLength * fScale;\n\tvec3 v3SampleRay = v3Ray * fSampleLength;\n\tvec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;\n\n\t// Now loop through the sample rays\n\tvec3 v3FrontColor = vec3(0.0, 0.0, 0.0);\n\tvec3 v3Attenuate;\n\tfor(int i=0; i<nSamples; i++)\n\t{\n\t\tfloat fHeight = length(v3SamplePoint);\n\t\tfloat fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));\n\t\tfloat fScatter = fDepth*fTemp - fCameraOffset;\n\t\tv3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));\n\t\tv3FrontColor += v3Attenuate * (fDepth * fScaledLength);\n\t\tv3SamplePoint += v3SampleRay;\n\t}\n\n\t// Atmosphere calculations output:\n\tfrontColor = vec4(v3FrontColor * (v3InvWavelength * fKrESun + fKmESun), 1.0);\n\t// Calculate the attenuation factor for the ground\n\tsecondaryColor = vec4(v3Attenuate, 1.0);\n\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n}\n";
+objects_globe_AtmosphereInnerMaterial.fragmentShaderStr = "//\n// Atmospheric scattering fragment shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\n#ifdef GROUND_TEXTURES\nuniform sampler2D threeTextureBug;\nvarying vec2 vUv;\n#endif\n\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n\nvoid main (void)\n{\n\t#ifdef GROUND_TEXTURES\n\tgl_FragColor = frontColor + texture2D(threeTextureBug, vUv) * secondaryColor;\n\t#else\n\t// gl_FragColor = frontColor*0.5 + mix(frontColor, secondaryColor*0.25, 0.5) + .0 * secondaryColor;\n\tgl_FragColor = frontColor*0.95 + .1 * secondaryColor;\n\t#endif\n}\n";
+objects_globe_AtmosphereOuterMaterial.vertexShaderStr = "//\n// Atmospheric scattering vertex shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform vec3 v3InvWavelength;\t// 1 / pow(wavelength, 4) for the red, green, and blue channels\nuniform float fOuterRadius;\t\t// The outer (atmosphere) radius\nuniform float fOuterRadius2;\t// fOuterRadius^2\nuniform float fInnerRadius;\t\t// The inner (planetary) radius\nuniform float fInnerRadius2;\t// fInnerRadius^2\nuniform float fKrESun;\t\t\t// Kr * ESun\nuniform float fKmESun;\t\t\t// Km * ESun\nuniform float fKr4PI;\t\t\t// Kr * 4 * PI\nuniform float fKm4PI;\t\t\t// Km * 4 * PI\nuniform float fScale;\t\t\t// 1 / (fOuterRadius - fInnerRadius)\nuniform float fScaleDepth;\t\t// The scale depth (i.e. the altitude at which the atmosphere's average density is found)\nuniform float fScaleOverScaleDepth;\t// fScale / fScaleDepth\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvarying vec3 v3Direction;\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\nconst float fSamples = float(nSamples);//nSamples provided in prepended define\n\nfloat scale(float fCos)\n{\n\tfloat x = 1.0 - fCos;\n\treturn fScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));\n}\n\nvoid main(void)\n{\t\n\t//get values from three.js\n\t//@! doesn't currently handle glancing camera angles\n\tvec3 v3LightDir = directionalLightDirection[0];\n\tvec3 v3VertPos = (modelMatrix * vec4(position, 1.)).xyz;//world coordinates\n\tvec3 v3CameraPos = cameraPosition;\n\n\tfloat fCameraHeight = length(v3CameraPos);\n\tfloat fCameraHeight2 = fCameraHeight * fCameraHeight;\n\n\t// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)\n\tvec3 v3Ray = v3VertPos - v3CameraPos;\n\tfloat fFar = length(v3Ray);\n\tv3Ray /= fFar;\n\n\t// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)\n\tfloat B = 2.0 * dot(v3CameraPos, v3Ray);\n\tfloat C = fCameraHeight2 - fOuterRadius2;\n\tfloat fDet = max(0.0, B*B - 4.0 * C);\n\tfloat fNear = 0.5 * (-B - sqrt(fDet));\n\n\t// Calculate the ray's starting position, then calculate its scattering offset\n\tvec3 v3Start = v3CameraPos + v3Ray * fNear;\n\tfFar -= fNear;\n\tfloat fStartAngle = dot(v3Ray, v3Start) / fOuterRadius;\n\tfloat fStartDepth = exp(-1.0 / fScaleDepth);\n\tfloat fStartOffset = fStartDepth * scale(fStartAngle);\n\n\t// Initialize the scattering loop variables\n\tfloat fSampleLength = fFar / fSamples;\n\tfloat fScaledLength = fSampleLength * fScale;\n\tvec3 v3SampleRay = v3Ray * fSampleLength;\n\tvec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;\n\n\t// Now loop through the sample rays\n\tvec3 v3FrontColor = vec3(0.0, 0.0, 0.0);\n\tfor(int i=0; i<nSamples; i++)\n\t{\n\t\tfloat fHeight = length(v3SamplePoint);\n\t\tfloat fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));\n\t\tfloat fLightAngle = dot(v3LightDir, v3SamplePoint) / fHeight;\n\t\tfloat fCameraAngle = dot(v3Ray, v3SamplePoint) / fHeight;\n\t\tfloat fScatter = (fStartOffset + fDepth * (scale(fLightAngle) - scale(fCameraAngle)));\n\t\tvec3 v3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));\n\n\t\tv3FrontColor += v3Attenuate * (fDepth * fScaledLength);\n\t\tv3SamplePoint += v3SampleRay;\n\t}\n\n\t// Finally, scale the Mie and Rayleigh colors and set up the varying variables for the pixel shader\n\tsecondaryColor = vec4(v3FrontColor * fKmESun, 1.0);\n\tfrontColor = vec4(v3FrontColor * (v3InvWavelength * fKrESun), 1.0);\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n\tv3Direction = v3CameraPos - v3VertPos;\n}";
+objects_globe_AtmosphereOuterMaterial.fragmentShaderStr = "//\n// Atmospheric scattering fragment shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform float g;\nuniform float g2;\n\nvarying vec3 v3Direction;\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvoid main (void)\n{\n\tvec3 v3LightDir = directionalLightDirection[0];\n\n\tfloat fCos = dot(v3LightDir, v3Direction) / length(v3Direction);\n\tfloat fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCos*fCos) / pow(1.0 + g2 - 2.0*g*fCos, 1.5);\n\tgl_FragColor = frontColor + fMiePhase * secondaryColor;\n\tgl_FragColor.a = gl_FragColor.b;\n}";
+objects_globe_Globe.earthSegments = 80;
+objects_globe_GlobeMaterial.vertexShaderStr = "#define PHONG\nvarying vec3 vViewPosition;\n#ifndef FLAT_SHADED\n\tvarying vec3 vNormal;\n#endif\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_vertex\n" + THREE.ShaderChunk.map_pars_vertex + "\n\nvoid main() {\n\n\t//ShaderChunk.map_vertex\n\t" + THREE.ShaderChunk.map_vertex + "\n\n\t//ShaderChunk.defaultnormal_vertex\n\t" + THREE.ShaderChunk.defaultnormal_vertex + "\n\n\t#ifndef FLAT_SHADED // Normal computed with derivatives when FLAT_SHADED\n\t\tvNormal = normalize( transformedNormal );\n\t#endif\n\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n\n\tvViewPosition = -mvPosition.xyz;\n\n}";
+objects_globe_GlobeMaterial.fragmentShaderStr = "#define PHONG\n\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform vec3 specular;\nuniform float shininess;\nuniform float opacity;\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_fragment\n" + THREE.ShaderChunk.map_pars_fragment + "\n//ShaderChunk.alphamap_pars_fragment\n" + THREE.ShaderChunk.alphamap_pars_fragment + "\n//ShaderChunk.lights_phong_pars_fragment\n" + THREE.ShaderChunk.lights_phong_pars_fragment + "\n//ShaderChunk.bumpmap_pars_fragment\n" + THREE.ShaderChunk.bumpmap_pars_fragment + "\n//ShaderChunk.normalmap_pars_fragment\n" + THREE.ShaderChunk.normalmap_pars_fragment + "\n//ShaderChunk.specularmap_pars_fragment\n" + THREE.ShaderChunk.specularmap_pars_fragment + "\n\nvoid main() {\n\n\tvec3 outgoingLight = vec3( 0.0 );\t// outgoing light does not have an alpha, the surface does\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\n\t//ShaderChunk.map_fragment\n\t" + THREE.ShaderChunk.map_fragment + "\n\t//ShaderChunk.alphamap_fragment\n\t" + THREE.ShaderChunk.alphamap_fragment + "\n\t//ShaderChunk.alphatest_fragment\n\t" + THREE.ShaderChunk.alphatest_fragment + "\n\t//ShaderChunk.specularmap_fragment\n\t" + THREE.ShaderChunk.specularmap_fragment + "\n\n\t//ShaderChunk.lights_phong_fragment\n\t#ifndef FLAT_SHADED\n\t\tvec3 normal = normalize( vNormal );\n\t\t#ifdef DOUBLE_SIDED\n\t\t\tnormal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );\n\t\t#endif\n\t#else\n\t\tvec3 fdx = dFdx( vViewPosition );\n\t\tvec3 fdy = dFdy( vViewPosition );\n\t\tvec3 normal = normalize( cross( fdx, fdy ) );\n\t#endif\n\n\tvec3 viewPosition = normalize( vViewPosition );\n\n\t#ifdef USE_NORMALMAP\n\t\tnormal = perturbNormal2Arb( -vViewPosition, normal );\n\t#elif defined( USE_BUMPMAP )\n\t\tnormal = perturbNormalArb( -vViewPosition, normal, dHdxy_fwd() );\n\t#endif\n\n\tvec3 totalDiffuseLight = vec3( 0.0 );\n\tvec3 totalSpecularLight = vec3( 0.0 );\n\n\t#if MAX_DIR_LIGHTS > 0\n\t \tfor( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {\n\t \n\t \t\tvec3 dirVector = transformDirection( directionalLightDirection[ i ], viewMatrix );\n\t \n\t \t\t// diffuse\n\t \t\tfloat dotProduct = dot( normal, dirVector );\n\n\n\t \t\t//@! phong backside hack\n\t \t\t#define WRAP_AROUND\n\t \t\tvec3 wrapRGB = vec3(1.0, 125./255., 18./255.);\n\t \t\tfloat backsideAmbience = 0.08;\n\t \n\t \t\t#ifdef WRAP_AROUND\n\t \t\t\t//@! doubled dot products\n\t \t\t\tfloat dirDiffuseWeightFull = max( dotProduct, 0.0 );\n\t \t\t\tfloat dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );\n\t \t\t\tvec3 dirDiffuseWeight = mix( vec3( dirDiffuseWeightFull ), vec3( dirDiffuseWeightHalf ), wrapRGB*0.4 + dotProduct*1.2 ) + wrapRGB * backsideAmbience;\n\t \t\t#else\n\t \t\t\tfloat dirDiffuseWeight = max( dotProduct, 0.0 );\n\t \t\t#endif\n\t \n\t \t\ttotalDiffuseLight += directionalLightColor[ i ] * dirDiffuseWeight;\n\t \n\t \t\t// specular\n\t \t\tvec3 dirHalfVector = normalize( dirVector + viewPosition );\n\t \t\tfloat dirDotNormalHalf = max( dot( normal, dirHalfVector ), 0.0 );\n\t \t\tfloat dirSpecularWeight = specularStrength * max( pow( dirDotNormalHalf, shininess ), 0.0 );\t \n\t \t\tfloat specularNormalization = ( shininess + 2.0 ) / 8.0;\n\n\t \t\tvec3 schlick = specular + vec3( 1.0 - specular ) * pow( max( 1.0 - dot( dirVector, dirHalfVector ), 0.0 ), 5.0 );\n\t \t\ttotalSpecularLight += schlick * directionalLightColor[ i ] * dirSpecularWeight * dirDiffuseWeight * specularNormalization;\n\t \t}\n\t#endif\n\n\toutgoingLight += diffuseColor.rgb * ( totalDiffuseLight + ambientLightColor ) + totalSpecularLight + emissive;\n\n\t//ShaderChunk.linear_to_gamma_fragment\n\t" + THREE.ShaderChunk.linear_to_gamma_fragment + "\n\n\tgl_FragColor = vec4( outgoingLight, diffuseColor.a );\t// TODO, this should be pre-multiplied to allow for bright highlights on very transparent objects\n\n}";
+objects_migration_MigrationPathMaterial.vertexShaderStr = "varying vec2 vUv;\n\n\nvoid main() {\n\tvUv = uv;\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n}";
+objects_migration_MigrationPathMaterial.fragmentShaderStr = "uniform float offset;\nuniform float lengthScale;\n\nvarying vec2 vUv;\n\nvoid main() {\n\t// vec3 c = vec3(0);\n\t\n\tfloat x = 0.5;\n\tfloat a = smoothstep(0., x, vUv.y);\n\tfloat b = smoothstep(0., x, 1. - vUv.y);\n\n\t//end curve\n\tfloat p = 0.988;\n\n\tfloat u = (vUv.x*lengthScale - offset*lengthScale);\n\n    float f = smoothstep(1.0, p, u);\n    float k = smoothstep(0., 1. - p, vUv.x);//special, can ignore for now\n\n\tfloat i = a * b * f * k;\n\ti *= i * (u);\n\n\n\n\tvec3 c = vec3(\n\t\t1.0,\n\t\t0.25,\n\t\t0.0\n\t);\n\n\t// c = vec3(0.1, 0.7, 1.0);\n\t//increase intensity toward the middle\n\tc *= c*i + vec3(1.0);\n\tc += vec3(1.0)*i*i;\n\tgl_FragColor = vec4(c * i, i);\n}";
 Main.main();
 })(typeof window != "undefined" ? window : exports, typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);
