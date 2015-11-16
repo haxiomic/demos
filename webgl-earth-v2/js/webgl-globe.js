@@ -25,25 +25,8 @@ AssetEvent.prototype = {
 };
 var CompileTime = function() { };
 CompileTime.__name__ = true;
-var EReg = function(r,opt) {
-	opt = opt.split("u").join("");
-	this.r = new RegExp(r,opt);
-};
-EReg.__name__ = true;
-EReg.prototype = {
-	split: function(s) {
-		var d = "#__delim__#";
-		return s.replace(this.r,d).split(d);
-	}
-	,__class__: EReg
-};
 var HxOverrides = function() { };
 HxOverrides.__name__ = true;
-HxOverrides.cca = function(s,index) {
-	var x = s.charCodeAt(index);
-	if(x != x) return undefined;
-	return x;
-};
 HxOverrides.substr = function(s,pos,len) {
 	if(pos != null && pos != 0 && len != null && len < 0) return "";
 	if(len == null) len = s.length;
@@ -66,33 +49,6 @@ HxOverrides.iter = function(a) {
 		return this.arr[this.cur++];
 	}};
 };
-var objects_globe_GeoCoord = function(latitudeNorth,longitudeWest,altitude) {
-	if(altitude == null) altitude = 0;
-	if(longitudeWest == null) longitudeWest = 0;
-	if(latitudeNorth == null) latitudeNorth = 0;
-	this.lat = latitudeNorth;
-	this["long"] = longitudeWest;
-	this.alt = altitude;
-};
-objects_globe_GeoCoord.__name__ = true;
-objects_globe_GeoCoord.fromGoogleEarthString = function(coordinates) {
-	var geoCoords = [];
-	var splitRegex = new EReg("\\s+","g");
-	var splitCoordinates = splitRegex.split(StringTools.trim(coordinates));
-	return splitCoordinates.map(function(s) {
-		var sa = s.split(",");
-		if(sa.length != 3) throw new js__$Boot_HaxeError("google earth coordinate parse error");
-		return new objects_globe_GeoCoord(parseFloat(sa[1]),-parseFloat(sa[0]),parseFloat(sa[2]) / 6378100);
-	});
-};
-objects_globe_GeoCoord.prototype = {
-	clone: function() {
-		return new objects_globe_GeoCoord(this.lat,this["long"],this.alt);
-	}
-	,__class__: objects_globe_GeoCoord
-};
-var Locations = function() { };
-Locations.__name__ = true;
 var Main = $hx_exports.Globe = function(container,assetRoot) {
 	if(assetRoot == null) assetRoot = "assets";
 	this.sunAngularVelocity = 0;
@@ -122,13 +78,41 @@ var Main = $hx_exports.Globe = function(container,assetRoot) {
 	this.raycaster = new THREE.Raycaster();
 	this.globe = new objects_globe_Globe(1.0,assetRoot);
 	this.scene.add(this.globe);
-	var worldPoints = [];
-	var dwarfMinke1 = objects_globe_GeoCoord.fromGoogleEarthString("125.4156801502365,-58.06644178916677,0 125.6690520286516,-55.62956556158635,0 127.267928376675,-53.56752695259459,0 133.5113699846749,-50.4080620490514,0 138.1091303679843,-50.0554610120262,0 141.3756905844894,-47.84215473532596,0 142.7930470959936,-45.35806846483599,0 143.1146091547288,-42.35858493540049,0 143.8443439835141,-40.91638203146016,0 144.9290566228453,-39.99707844460131,0 146.1361548412232,-40.05633474347093,0 148.6347794779419,-38.90400726642145,0 150.8132730791048,-38.69979017663795,0 150.8607525529987,-36.9087133250309,0 151.7506201937049,-35.70124561350605,0 152.4544437762779,-34.43477339751064,0 153.2890273962649,-33.30985456413786,0 154.0416606237984,-30.80840612385732,0 154.2295559008717,-28.67535640236151,0 154.1543790811592,-27.27441670127317,0 154.2064531238732,-26.1457257963793,0 154.3767588465649,-24.98956687816237,0 153.9406000752065,-24.32124442129077,0 153.6472408394698,-23.13656635653421,0 153.279744143952,-21.73774779611184,0 152.8385188492032,-20.10522556081435,0 151.4227259204821,-20.06200980245429,0 148.7248788803227,-18.41995668552367,0 146.3472501121291,-16.77763586282796,0 145.7892467894279,-15.83389141911604,0 145.7208699785303,-15.43496316647002,0 145.6457637324097,-15.04734519997,0 145.5644660498914,-14.67653385720298,0 145.2386777927024,-14.38042364771917,0 144.4256531075568,-13.20429306000615,0 144.0648325003543,-11.39726484867401,0 144.1658769571635,-9.951859956488347,0");
-	var dwarfMinke2 = objects_globe_GeoCoord.fromGoogleEarthString("142.6727363765914,-53.22505845480889,0 144.9376957291831,-48.6954057789822,0 144.6613303464107,-46.99317266798141,0 143.5006050162573,-44.20103235263429,0 143.4641679788447,-42.49825056202535,0 144.0807230459198,-40.79318519213684,0 145.0320945747923,-39.34815881312177,0 146.09020401051,-39.683619614156,0 149.4061513009401,-39.05920414030068,0 150.4702065788303,-38.39996007454761,0 151.2582215571639,-36.79586344549869,0 152.1089161857852,-35.58316260832842,0 152.4446138858733,-34.11676932487371,0 153.2763285806631,-32.67025542209145,0 154.4310237107595,-30.24033018786529,0 154.7466089866114,-27.95133000605225,0 154.1857106533873,-26.71168411460474,0 154.2064531238732,-26.1457257963793,0 153.9865893422074,-25.01571282087592,0 153.4380088670825,-23.9144808204616,0 152.7600743252496,-23.13292389452813,0 151.756795361439,-22.22442417072507,0 150.4808253542965,-21.69832816718207,0 149.7130546999975,-20.04725110806228,0 148.0207015153903,-18.79786940126524,0 146.3825639349907,-16.52257966452151,0 145.950931891999,-15.87205122167076,0 145.8401745386045,-15.41257170463565,0 145.7344694275366,-15.03236707400803,0 145.5936447455039,-14.65010871718732,0 145.5330517575169,-14.57280225894031,0 145.3492500285115,-14.3570602392847,0 144.8002489121843,-13.32515491654578,0 144.2913144805902,-11.9193279149041,0 144.505056391914,-11.58086207454052,0");
-	this.trail1 = new objects_migration_MigrationPath(this.globe,dwarfMinke1);
-	this.globe.earthMesh.add(this.trail1);
-	this.trail2 = new objects_migration_MigrationPath(this.globe,dwarfMinke2);
-	this.globe.earthMesh.add(this.trail2);
+	this.trails = [];
+	var $it0 = data.Paths.allPaths.keys();
+	while( $it0.hasNext() ) {
+		var name = $it0.next();
+		var tmp1;
+		var _this1 = data.Paths.allPaths;
+		if(__map_reserved[name] != null) tmp1 = _this1.getReserved(name); else tmp1 = _this1.h[name];
+		var coords = tmp1;
+		var tmp2;
+		var _g = HxOverrides.substr(name,0,4).toLowerCase();
+		switch(_g) {
+		case "dwar":
+			tmp2 = 15549696;
+			break;
+		case "gree":
+			tmp2 = 630016;
+			break;
+		default:
+			tmp2 = 16711680;
+		}
+		var color = tmp2;
+		var tmp3;
+		var _g1 = [];
+		var _g11 = 0;
+		while(_g11 < coords.length) {
+			var a = coords[_g11];
+			++_g11;
+			_g1.push(new math_CGeoCoord(a[0],a[1],a[2]));
+		}
+		tmp3 = _g1;
+		var path = new objects_migration_MigrationPath(this.globe,tmp3,color,0.01);
+		path.migrationMaterial.uniforms.progress.value = 0;
+		this.trails.push(path);
+		this.globe.earthMesh.add(path);
+	}
 	this.debugInit();
 	window.addEventListener("resize",$bind(this,this.onWindowResize),false);
 	this.canvas.addEventListener("mousedown",$bind(this,this.onMouseDown),false);
@@ -154,7 +138,7 @@ Main.prototype = {
 		if(time_s == null) time_s = 2;
 		var _g = this;
 		console.log("Globe: setChapter " + i);
-		var locations = [Locations.great_barrier_reef,new objects_globe_GeoCoord(-12.823020,-154.204906),new objects_globe_GeoCoord(13.185726,-159.283641),new objects_globe_GeoCoord(10.173778,-100.150828)];
+		var locations = [new math_CGeoCoord(-42.44466811222699,-158.671614578854,0),new math_CGeoCoord(-12.823020,-154.204906,0),new math_CGeoCoord(13.185726,-159.283641,0),new math_CGeoCoord(10.173778,-100.150828,0)];
 		var loc = locations[i % locations.length];
 		if(this.marker != null) this.marker.parent.remove(this.marker);
 		this.marker = this.globe.addMarker(loc);
@@ -175,6 +159,18 @@ Main.prototype = {
 			this.camera.position.copy(cameraTargetSpace);
 			this._u.set(0,0,0);
 			this.camera.lookAt(this._u);
+		}
+	}
+	,animateTrails: function() {
+		var _g = 0;
+		var _g1 = this.trails;
+		while(_g < _g1.length) {
+			var t = _g1[_g];
+			++_g;
+			t.migrationMaterial.uniforms.progress.value = 0;
+			t.migrationMaterial.uniforms.scale.value = 1.;
+			var trailTween = motion_Actuate.tween(t,20,{ progress : 1},true);
+			trailTween.ease(motion_easing_Sine.get_easeOut());
 		}
 	}
 	,update: function(t_ms) {
@@ -265,18 +261,21 @@ Main.prototype = {
 		var gui = new dat.GUI();
 		gui.add(this.camera,"fov").name("FOV").min(1).max(180).onChange(function(x) {
 			_g.camera.updateProjectionMatrix();
-			console.log("fov " + x);
 		});
 		gui.add(this,"sunSpringK").name("Sun Spring Strength").min(0).max(20);
 		gui.add(this,"sunSpringDamp").name("Sun Spring Dampening").min(0).max(1);
-		gui.add({ v : this.trail1.migrationMaterial.uniforms.offset.value},"v").name("Trail offset").step(0.001).min(-1).max(1).onChange(function(v) {
-			_g.trail1.migrationMaterial.uniforms.offset.value = v;
-			_g.trail2.migrationMaterial.uniforms.offset.value = v;
+		gui.addColor({ color : "#" + this.trails[0].migrationMaterial.uniforms.color.value.getHexString()},"color").onChange(function(c) {
+			var _g1 = 0;
+			var _g2 = _g.trails;
+			while(_g1 < _g2.length) {
+				var t = _g2[_g1];
+				++_g1;
+				t.migrationMaterial.uniforms.color.value.setStyle(c);
+			}
 		});
-		gui.add({ v : this.trail1.migrationMaterial.uniforms.lengthScale.value},"v").name("Trail lengthScale").step(0.001).onChange(function(v1) {
-			_g.trail1.migrationMaterial.uniforms.lengthScale.value = v1;
-			_g.trail2.migrationMaterial.uniforms.lengthScale.value = v1;
-		});
+		gui.add({ f : function() {
+			_g.animateTrails();
+		}},"f").name("Animate Trails");
 		var li = 1;
 		gui.add({ f : function() {
 			_g.setChapter(li++);
@@ -312,27 +311,6 @@ Std.__name__ = true;
 Std.string = function(s) {
 	return js_Boot.__string_rec(s,"");
 };
-var StringTools = function() { };
-StringTools.__name__ = true;
-StringTools.isSpace = function(s,pos) {
-	var c = HxOverrides.cca(s,pos);
-	return c > 8 && c < 14 || c == 32;
-};
-StringTools.ltrim = function(s) {
-	var l = s.length;
-	var r = 0;
-	while(r < l && StringTools.isSpace(s,r)) r++;
-	if(r > 0) return HxOverrides.substr(s,r,l - r); else return s;
-};
-StringTools.rtrim = function(s) {
-	var l = s.length;
-	var r = 0;
-	while(r < l && StringTools.isSpace(s,l - r - 1)) r++;
-	if(r > 0) return HxOverrides.substr(s,0,l - r); else return s;
-};
-StringTools.trim = function(s) {
-	return StringTools.ltrim(StringTools.rtrim(s));
-};
 var Type = function() { };
 Type.__name__ = true;
 Type.createInstance = function(cl,args) {
@@ -361,74 +339,214 @@ Type.createInstance = function(cl,args) {
 	}
 	return null;
 };
-var geometry_RibbonGeometry = function(curve3,widthFunc,normalFunc,slices,stacks) {
+var geometry_RibbonGeometry = function(primary,widthFunc,normalFunc,slices,stacks) {
 	if(stacks == null) stacks = 1;
 	if(slices == null) slices = 100;
+	this._w3 = new THREE.Vector3();
+	this._v3 = new THREE.Vector3();
+	this._u3 = new THREE.Vector3();
 	this.curveFraction = 1;
-	var _g = this;
-	this.curve3 = curve3;
+	THREE.Geometry.call(this);
+	this.primary = primary;
 	this.slices = slices;
 	this.stacks = stacks;
 	this.widthFunc = widthFunc;
-	this.normalFunc = normalFunc != null?normalFunc:$bind(this,this.naturalNormal);
-	THREE.ParametricGeometry.call(this,function(u,t) {
-		return _g.ribbonFunc(u,t,new THREE.Vector3());
-	},slices,stacks);
+	this.normalFunc = normalFunc != null?normalFunc:$bind(this,this.defaultNormal);
+	this.leftCurve = this.createLoopFreeOffsetCurve(primary,1,slices * 2);
+	this.rightCurve = this.createLoopFreeOffsetCurve(primary,0,slices * 2);
+	this.computeVertices(true);
+	this.cumulativeLengths = [];
+	this.totalLength = 0;
+	var lastPoint = null;
+	var _g1 = 0;
+	var _g = slices + 1;
+	while(_g1 < _g) {
+		var j = _g1++;
+		var u = j / slices;
+		var p = primary.getPoint(u);
+		if(lastPoint != null) this.totalLength += p.distanceTo(lastPoint);
+		this.cumulativeLengths.push(this.totalLength);
+		lastPoint = p;
+	}
+	var faces = this.faces;
+	var uvs = this.faceVertexUvs[0];
+	var nuvs = this.faceVertexUvs[1] = [];
+	var sliceCount = slices + 1;
+	var _g2 = 0;
+	while(_g2 < stacks) {
+		var i = _g2++;
+		var _g11 = 0;
+		while(_g11 < slices) {
+			var j1 = _g11++;
+			var a = i * sliceCount + j1;
+			var b = i * sliceCount + j1 + 1;
+			var c = (i + 1) * sliceCount + j1 + 1;
+			var d = (i + 1) * sliceCount + j1;
+			var u0 = j1 / slices;
+			var u1 = (j1 + 1) / slices;
+			var t0 = i / stacks;
+			var t1 = (i + 1) / stacks;
+			var uva = new THREE.Vector2(u0,t0);
+			var uvb = new THREE.Vector2(u1,t0);
+			var uvc = new THREE.Vector2(u1,t1);
+			var uvd = new THREE.Vector2(u0,t1);
+			var nu0 = this.cumulativeLengths[j1] / this.totalLength;
+			var nu1 = this.cumulativeLengths[j1 + 1] / this.totalLength;
+			var nuva = new THREE.Vector2(nu0,t0);
+			var nuvb = new THREE.Vector2(nu1,t0);
+			var nuvc = new THREE.Vector2(nu1,t1);
+			var nuvd = new THREE.Vector2(nu0,t1);
+			var f1 = new THREE.Face3(a,b,d);
+			var f2 = new THREE.Face3(b,c,d);
+			faces.push(f1);
+			uvs.push([uva,uvb,uvd]);
+			nuvs.push([nuva,nuvb,nuvd]);
+			faces.push(f2);
+			uvs.push([uvb.clone(),uvc,uvd.clone()]);
+			nuvs.push([nuvb.clone(),nuvc,nuvd.clone()]);
+		}
+	}
+	this.computeFaceNormals();
+	this.computeVertexNormals();
 };
 geometry_RibbonGeometry.__name__ = true;
-geometry_RibbonGeometry.__super__ = THREE.ParametricGeometry;
-geometry_RibbonGeometry.prototype = $extend(THREE.ParametricGeometry.prototype,{
-	naturalNormal: function(u,t,p,tan,curve3) {
-		var q = u - 0.0013;
-		var sign = 1;
-		if(q < 0) {
-			q *= -1;
-			sign *= -1;
-		}
-		var oTan = curve3.getTangent(q);
-		var n = new THREE.Vector3().addVectors(tan,oTan).multiplyScalar(sign * .5);
-		return n.normalize();
-	}
-	,ribbonFunc: function(u,t,v3) {
-		u = THREE.Math.clamp(u - (1 - this.curveFraction),0,1);
-		t = t - 0.5;
-		var w = this.widthFunc(u,t);
-		var p = this.curve3.getPoint(u);
-		var tan = this.curve3.getTangent(u);
-		v3.crossVectors(this.normalFunc(u,t,p,tan,this.curve3),tan);
-		v3.normalize();
-		v3.multiplyScalar(w * t);
-		v3.add(p);
-		return v3;
-	}
-	,recomputeVertices: function() {
-		console.log("Recomputing Vertices");
-		this.dynamic = true;
-		var u;
-		var v;
+geometry_RibbonGeometry.__super__ = THREE.Geometry;
+geometry_RibbonGeometry.prototype = $extend(THREE.Geometry.prototype,{
+	computeVertices: function(allocate) {
+		if(allocate == null) allocate = false;
 		var vIdx = 0;
 		var _g1 = 0;
 		var _g = this.stacks + 1;
 		while(_g1 < _g) {
 			var i = _g1++;
-			v = i / this.stacks;
+			var v = i / this.stacks;
 			var _g3 = 0;
 			var _g2 = this.slices + 1;
 			while(_g3 < _g2) {
 				var j = _g3++;
-				u = j / this.slices;
-				this.ribbonFunc(u,v,this.vertices[vIdx++]);
+				var u = j / this.slices;
+				var v3 = allocate?new THREE.Vector3():this.vertices[vIdx];
+				this.vertices[vIdx] = this.ribbonFuncFromOffsets(u,v,v3);
+				vIdx++;
 			}
 		}
+	}
+	,defaultNormal: function(u,t,p,tan,primary) {
+		return new THREE.Vector3(-1,0,0);
+	}
+	,ribbonFunc: function(u,t,v3) {
+		u = THREE.Math.clamp(u - (1 - this.curveFraction),0,1);
+		t = t - 0.5;
+		var w = this.widthFunc(u,t);
+		var p = this.primary.getPoint(u);
+		var tan = this.primary.getTangent(u);
+		v3.crossVectors(this.normalFunc(u,t,p,tan,this.primary),tan);
+		v3.normalize();
+		v3.multiplyScalar(w * t);
+		v3.add(p);
+		return v3;
+	}
+	,ribbonFuncFromOffsets: function(u,t,v3) {
+		u = THREE.Math.clamp(u - (1 - this.curveFraction),0,1);
+		return v3.lerpVectors(this.rightCurve.getPoint(u),this.leftCurve.getPoint(u),t);
+	}
+	,createLoopFreeOffsetCurve: function(primary,side,samples) {
+		var offsetPoints = [];
+		var _g1 = 0;
+		var _g = samples + 1;
+		while(_g1 < _g) {
+			var i = _g1++;
+			var u = i / samples;
+			offsetPoints.push(this.ribbonFunc(u,side,new THREE.Vector3()));
+		}
+		var offsetSpline = new THREE.SplineCurve3(offsetPoints);
+		return this.removeOffsetLoops(offsetSpline,primary,samples * 2);
+	}
+	,removeOffsetLoops: function(offset,primary,samples) {
+		var clipBoundaries = [];
+		var s;
+		var e;
+		var adj = false;
+		var i = 0;
+		while(i < samples + 1) {
+			var u = i / samples;
+			var primaryTangent = primary.getTangent(u);
+			var offsetTangent = offset.getTangent(u);
+			var dot = offsetTangent.dot(primaryTangent);
+			if(dot < 0) {
+				if(!adj) s = u;
+				adj = true;
+			} else {
+				if(adj) {
+					e = u;
+					var overlapBounds = this.findOverlapBounds(s,e,primary,offset);
+					clipBoundaries.push(overlapBounds);
+					i = Math.round(overlapBounds[1] * samples);
+				}
+				adj = false;
+			}
+			i++;
+		}
+		var nonLoopPoints = [];
+		var _g1 = 0;
+		var _g = samples + 1;
+		while(_g1 < _g) {
+			var i1 = _g1++;
+			var u1 = i1 / samples;
+			var v = u1;
+			var _g2 = 0;
+			while(_g2 < clipBoundaries.length) {
+				var cb = clipBoundaries[_g2];
+				++_g2;
+				var s1 = cb[0];
+				var e1 = cb[1];
+				if(u1 > s1 && u1 < e1) {
+					v = u1 - s1 < e1 - u1?s1:e1;
+					break;
+				}
+			}
+			nonLoopPoints.push(offset.getPoint(v));
+		}
+		return new math_LerpCurve3(nonLoopPoints);
+	}
+	,findOverlapBounds: function(s,e,primary,offset) {
+		var n = 0;
+		while(s >= 0 && n++ < 1000) {
+			var s1 = offset.getPoint(s);
+			var m = 0;
+			var outside = false;
+			while(e <= 1 && m++ < 1000) {
+				var e0 = primary.getPoint(e);
+				var e1 = offset.getPoint(e);
+				var e0e1 = this._u3.subVectors(e1,e0);
+				var e1s1 = this._v3.subVectors(s1,e1);
+				var proj = e1s1.dot(e0e1);
+				var p = e0e1.normalize().multiplyScalar(proj).add(e1);
+				var ps1 = this._w3.subVectors(s1,p);
+				var tan = primary.getTangent(e);
+				var dot = ps1.dot(tan);
+				if(dot <= 0) {
+					if(proj >= 0) outside = true;
+					break;
+				}
+				e += 0.0005;
+			}
+			if(outside) break;
+			s -= 5e-05;
+		}
+		if(s < 0) s = 0;
+		if(e > 1) e = 1;
+		return [s,e];
+	}
+	,set_curveFraction: function(v) {
+		this.curveFraction = v;
+		this.dynamic = true;
+		this.computeVertices();
 		this.computeFaceNormals();
 		this.computeVertexNormals();
 		this.verticesNeedUpdate = true;
 		this.uvsNeedUpdate = true;
 		this.normalsNeedUpdate = true;
-	}
-	,set_curveFraction: function(v) {
-		this.curveFraction = v;
-		this.recomputeVertices();
 		return this.curveFraction;
 	}
 	,__class__: geometry_RibbonGeometry
@@ -483,7 +601,28 @@ var haxe_ds_StringMap = function() {
 haxe_ds_StringMap.__name__ = true;
 haxe_ds_StringMap.__interfaces__ = [haxe_IMap];
 haxe_ds_StringMap.prototype = {
-	__class__: haxe_ds_StringMap
+	getReserved: function(key) {
+		return this.rh == null?null:this.rh["$" + key];
+	}
+	,keys: function() {
+		var tmp;
+		var _this = this.arrayKeys();
+		tmp = HxOverrides.iter(_this);
+		return tmp;
+	}
+	,arrayKeys: function() {
+		var out = [];
+		for( var key in this.h ) {
+		if(this.h.hasOwnProperty(key)) out.push(key);
+		}
+		if(this.rh != null) {
+			for( var key in this.rh ) {
+			if(key.charCodeAt(0) == 36) out.push(key.substr(1));
+			}
+		}
+		return out;
+	}
+	,__class__: haxe_ds_StringMap
 };
 var js__$Boot_HaxeError = function(val) {
 	Error.call(this);
@@ -633,6 +772,67 @@ js_Boot.__isNativeObj = function(o) {
 js_Boot.__resolveNativeClass = function(name) {
 	return $global[name];
 };
+var math__$GeoCoord_GeoCoord_$Impl_$ = {};
+math__$GeoCoord_GeoCoord_$Impl_$.__name__ = true;
+math__$GeoCoord_GeoCoord_$Impl_$._new = function(latitudeNorth,longitudeWest,altitude) {
+	if(altitude == null) altitude = 0;
+	if(longitudeWest == null) longitudeWest = 0;
+	if(latitudeNorth == null) latitudeNorth = 0;
+	return new math_CGeoCoord(latitudeNorth,longitudeWest,altitude);
+};
+math__$GeoCoord_GeoCoord_$Impl_$.toArray = function(this1) {
+	return [this1.lat,this1["long"],this1.alt];
+};
+math__$GeoCoord_GeoCoord_$Impl_$.fromArray = function(arr) {
+	return new math_CGeoCoord(arr[0],arr[1],arr[2]);
+};
+var math_CGeoCoord = function(latitudeNorth,longitudeWest,altitude) {
+	if(altitude == null) altitude = 0;
+	if(longitudeWest == null) longitudeWest = 0;
+	if(latitudeNorth == null) latitudeNorth = 0;
+	this.lat = latitudeNorth;
+	this["long"] = longitudeWest;
+	this.alt = altitude;
+};
+math_CGeoCoord.__name__ = true;
+math_CGeoCoord.prototype = {
+	clone: function() {
+		return new math_CGeoCoord(this.lat,this["long"],this.alt);
+	}
+	,__class__: math_CGeoCoord
+};
+var math_LerpCurve3 = function(points) {
+	this.points = points;
+};
+math_LerpCurve3.__name__ = true;
+math_LerpCurve3.__super__ = THREE.Curve;
+math_LerpCurve3.prototype = $extend(THREE.Curve.prototype,{
+	getPoint: function(u) {
+		var idx0 = Math.floor(u * (this.points.length - 1));
+		var idx1 = Math.ceil(u * (this.points.length - 1));
+		if(idx0 == idx1) return this.points[idx0]; else {
+			var u0 = idx0 / (this.points.length - 1);
+			var u1 = idx1 / (this.points.length - 1);
+			return new THREE.Vector3().lerpVectors(this.points[idx0],this.points[idx1],u1 - u0);
+		}
+	}
+	,getTangent: function(u) {
+		var idx0 = Math.floor(u * (this.points.length - 1));
+		var idx1 = Math.ceil(u * (this.points.length - 1));
+		if(idx0 == idx1) {
+			idx1++;
+			if(idx1 >= this.points.length) {
+				idx1--;
+				idx0--;
+			}
+		}
+		var p0 = this.points[idx0];
+		var p1 = this.points[idx1];
+		var tangent = new THREE.Vector3().subVectors(p1,p0).normalize();
+		return tangent;
+	}
+	,__class__: math_LerpCurve3
+});
 var motion_actuators_IGenericActuator = function() { };
 motion_actuators_IGenericActuator.__name__ = true;
 motion_actuators_IGenericActuator.prototype = {
@@ -1765,6 +1965,57 @@ motion_easing_QuadEaseOut.prototype = {
 	}
 	,__class__: motion_easing_QuadEaseOut
 };
+var motion_easing_Sine = function() { };
+motion_easing_Sine.__name__ = true;
+motion_easing_Sine.__properties__ = {get_easeOut:"get_easeOut",get_easeInOut:"get_easeInOut",get_easeIn:"get_easeIn"}
+motion_easing_Sine.get_easeIn = function() {
+	return new motion_easing_SineEaseIn();
+};
+motion_easing_Sine.get_easeInOut = function() {
+	return new motion_easing_SineEaseInOut();
+};
+motion_easing_Sine.get_easeOut = function() {
+	return new motion_easing_SineEaseOut();
+};
+var motion_easing_SineEaseIn = function() {
+};
+motion_easing_SineEaseIn.__name__ = true;
+motion_easing_SineEaseIn.__interfaces__ = [motion_easing_IEasing];
+motion_easing_SineEaseIn.prototype = {
+	calculate: function(k) {
+		return 1 - Math.cos(k * (Math.PI / 2));
+	}
+	,ease: function(t,b,c,d) {
+		return -c * Math.cos(t / d * (Math.PI / 2)) + c + b;
+	}
+	,__class__: motion_easing_SineEaseIn
+};
+var motion_easing_SineEaseInOut = function() {
+};
+motion_easing_SineEaseInOut.__name__ = true;
+motion_easing_SineEaseInOut.__interfaces__ = [motion_easing_IEasing];
+motion_easing_SineEaseInOut.prototype = {
+	calculate: function(k) {
+		return -(Math.cos(Math.PI * k) - 1) / 2;
+	}
+	,ease: function(t,b,c,d) {
+		return -c / 2 * (Math.cos(Math.PI * t / d) - 1) + b;
+	}
+	,__class__: motion_easing_SineEaseInOut
+};
+var motion_easing_SineEaseOut = function() {
+};
+motion_easing_SineEaseOut.__name__ = true;
+motion_easing_SineEaseOut.__interfaces__ = [motion_easing_IEasing];
+motion_easing_SineEaseOut.prototype = {
+	calculate: function(k) {
+		return Math.sin(k * (Math.PI / 2));
+	}
+	,ease: function(t,b,c,d) {
+		return c * Math.sin(t / d * (Math.PI / 2)) + b;
+	}
+	,__class__: motion_easing_SineEaseOut
+};
 var objects_globe_Atmosphere = function(innerRadius,outerRadius) {
 	THREE.Object3D.call(this);
 	var atmospherePrameters = { innerRadius : innerRadius, outerRadius : outerRadius, Kr : 0.0025, Km : 0.0010, ESun : 20.0, g : -0.990, wavelength : [0.650,0.570,0.475], rayleighScaleDepth : 0.25, mieScaleDepth : 0.1, nSamples : 4};
@@ -1869,7 +2120,7 @@ objects_globe_Globe.prototype = $extend(THREE.Object3D.prototype,{
 		return this.localToGeo(this.earthMesh.worldToLocal(p),c);
 	}
 	,localToGeo: function(p,c) {
-		if(c == null) c = new objects_globe_GeoCoord();
+		if(c == null) c = new math_CGeoCoord(0,0,0);
 		var r = p.length();
 		c.alt = r * this.radius - this.radius;
 		c.lat = THREE.Math.radToDeg(Math.asin(p.y / r));
@@ -2088,54 +2339,65 @@ objects_globe_GlobeMaterial.prototype = $extend(THREE.ShaderMaterial.prototype,{
 	,__class__: objects_globe_GlobeMaterial
 	,__properties__: {set_offsetRepeatOverride:"set_offsetRepeatOverride",get_offsetRepeatOverride:"get_offsetRepeatOverride",set_specular:"set_specular",get_specular:"get_specular",set_emissive:"set_emissive",get_emissive:"get_emissive",set_shininess:"set_shininess",get_shininess:"get_shininess",set_refractionRatio:"set_refractionRatio",get_refractionRatio:"get_refractionRatio",set_reflectivity:"set_reflectivity",get_reflectivity:"get_reflectivity",set_bumpScale:"set_bumpScale",get_bumpScale:"get_bumpScale",set_bumpMap:"set_bumpMap",get_bumpMap:"get_bumpMap",set_alphaMap:"set_alphaMap",get_alphaMap:"get_alphaMap",set_normalScale:"set_normalScale",get_normalScale:"get_normalScale",set_normalMap:"set_normalMap",get_normalMap:"get_normalMap",set_specularMap:"set_specularMap",get_specularMap:"get_specularMap",set_map:"set_map",get_map:"get_map",set_diffuse:"set_diffuse",get_diffuse:"get_diffuse",set_opacity_:"set_opacity_",get_opacity_:"get_opacity_"}
 });
-var objects_migration_MigrationPath = function(globe,geoPoints,segments) {
-	if(segments == null) segments = 300;
+var objects_migration_MigrationPath = function(globe,geoPoints,color,thickness,altOffset,segments) {
+	if(segments == null) segments = 200;
+	if(altOffset == null) altOffset = 0;
+	if(thickness == null) thickness = 0.015;
 	var worldPoints = [];
 	var _g = 0;
 	while(_g < geoPoints.length) {
 		var gc = geoPoints[_g];
 		++_g;
-		gc.alt = globe.radius * globe.atmospherePad * .5;
+		gc.alt = globe.radius * globe.atmospherePad * .5 + altOffset * globe.radius;
 		worldPoints.push(globe.geoToLocal(gc));
 	}
-	this.spline = new THREE.SplineCurve3(worldPoints);
+	this.primary = new THREE.SplineCurve3(worldPoints);
 	var sphereNormal = function(u,t,p,tan,curve) {
 		return p;
 	};
-	this.ribbonGeom = new geometry_RibbonGeometry(this.spline,function(u1,t1) {
-		return 0.015 * globe.radius;
-	},sphereNormal,segments,1);
+	var width = function(u1,t1) {
+		return thickness * globe.radius;
+	};
+	this.ribbonGeom = new geometry_RibbonGeometry(this.primary,width,sphereNormal,segments,1);
 	this.migrationMaterial = new objects_migration_MigrationPathMaterial();
 	THREE.Mesh.call(this,this.ribbonGeom,this.migrationMaterial);
+	this.migrationMaterial.uniforms.color.value.setHex(color);
 };
 objects_migration_MigrationPath.__name__ = true;
 objects_migration_MigrationPath.__super__ = THREE.Mesh;
 objects_migration_MigrationPath.prototype = $extend(THREE.Mesh.prototype,{
-	get_fraction: function() {
+	get_progress: function() {
+		return this.migrationMaterial.uniforms.progress.value;
+	}
+	,set_progress: function(v) {
+		return this.migrationMaterial.uniforms.progress.value = v;
+	}
+	,get_curveFraction: function() {
 		return this.ribbonGeom.curveFraction;
 	}
-	,set_fraction: function(v) {
+	,set_curveFraction: function(v) {
 		return this.ribbonGeom.set_curveFraction(v);
 	}
-	,get_offset: function() {
-		return this.migrationMaterial.uniforms.offset.value;
-	}
-	,set_offset: function(v) {
-		return this.migrationMaterial.uniforms.offset.value = v;
-	}
 	,get_lengthScale: function() {
-		return this.migrationMaterial.uniforms.lengthScale.value;
+		return 1 / this.migrationMaterial.uniforms.scale.value;
 	}
 	,set_lengthScale: function(v) {
-		return this.migrationMaterial.uniforms.lengthScale.value = v;
+		return this.migrationMaterial.uniforms.scale.value = 1 / v;
+	}
+	,get_color: function() {
+		return this.migrationMaterial.uniforms.color.value;
+	}
+	,set_color: function(v) {
+		return this.migrationMaterial.uniforms.color.value = v;
 	}
 	,__class__: objects_migration_MigrationPath
-	,__properties__: {set_fraction:"set_fraction",get_fraction:"get_fraction",set_lengthScale:"set_lengthScale",get_lengthScale:"get_lengthScale",set_offset:"set_offset",get_offset:"get_offset"}
+	,__properties__: {set_curveFraction:"set_curveFraction",get_curveFraction:"get_curveFraction",set_color:"set_color",get_color:"get_color",set_lengthScale:"set_lengthScale",get_lengthScale:"get_lengthScale",set_progress:"set_progress",get_progress:"get_progress"}
 });
 var objects_migration_MigrationPathMaterial = function(parameters) {
 	if(parameters != null) parameters; else { };
-	var shaderMaterialParameters = { vertexShader : objects_migration_MigrationPathMaterial.vertexShaderStr, fragmentShader : objects_migration_MigrationPathMaterial.fragmentShaderStr, uniforms : THREE.UniformsUtils.merge([THREE.UniformsLib.common,{ offset : { type : "f", value : 0}, lengthScale : { type : "f", value : 1}}])};
+	var shaderMaterialParameters = { vertexShader : objects_migration_MigrationPathMaterial.vertexShaderStr, fragmentShader : objects_migration_MigrationPathMaterial.fragmentShaderStr, uniforms : THREE.UniformsUtils.merge([THREE.UniformsLib.common,{ progress : { type : "f", value : 1}, scale : { type : "f", value : 1}, color : { type : "c", value : new THREE.Color(1.,0,0)}}])};
 	shaderMaterialParameters.transparent = true;
+	shaderMaterialParameters.side = THREE.FrontSide;
 	shaderMaterialParameters.blending = THREE.CustomBlending;
 	shaderMaterialParameters.blendEquation = THREE.AddEquation;
 	shaderMaterialParameters.blendSrc = THREE.OneFactor;
@@ -2164,10 +2426,6 @@ Bool.__ename__ = ["Bool"];
 var Class = { __name__ : ["Class"]};
 var Enum = { };
 var __map_reserved = {}
-objects_globe_GeoCoord.EARTH_RADIUS_M = 6378100;
-Locations.london = new objects_globe_GeoCoord(51.5072,0.1275);
-Locations.san_francisco = new objects_globe_GeoCoord(37.7833,122.4167);
-Locations.great_barrier_reef = new objects_globe_GeoCoord(-18.2861,-147.7000);
 Main.globeRadius = 1.0;
 haxe_ds_ObjectMap.count = 0;
 js_Boot.__toStr = {}.toString;
@@ -2184,8 +2442,8 @@ objects_globe_AtmosphereOuterMaterial.vertexShaderStr = "//\n// Atmospheric scat
 objects_globe_AtmosphereOuterMaterial.fragmentShaderStr = "//\n// Atmospheric scattering fragment shader\n//\n// Author: Sean O'Neil\n//\n// Copyright (c) 2004 Sean O'Neil\n//\n\nuniform float g;\nuniform float g2;\n\nvarying vec3 v3Direction;\nvarying vec4 secondaryColor;\nvarying vec4 frontColor;\n\n//three.js\n#if MAX_DIR_LIGHTS > 0\n\tuniform vec3 directionalLightColor[ MAX_DIR_LIGHTS ];\n\tuniform vec3 directionalLightDirection[ MAX_DIR_LIGHTS ];\n#endif\n\nvoid main (void)\n{\n\tvec3 v3LightDir = directionalLightDirection[0];\n\n\tfloat fCos = dot(v3LightDir, v3Direction) / length(v3Direction);\n\tfloat fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCos*fCos) / pow(1.0 + g2 - 2.0*g*fCos, 1.5);\n\tgl_FragColor = frontColor + fMiePhase * secondaryColor;\n\tgl_FragColor.a = gl_FragColor.b;\n}";
 objects_globe_Globe.earthSegments = 80;
 objects_globe_GlobeMaterial.vertexShaderStr = "#define PHONG\nvarying vec3 vViewPosition;\n#ifndef FLAT_SHADED\n\tvarying vec3 vNormal;\n#endif\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_vertex\n" + THREE.ShaderChunk.map_pars_vertex + "\n\nvoid main() {\n\n\t//ShaderChunk.map_vertex\n\t" + THREE.ShaderChunk.map_vertex + "\n\n\t//ShaderChunk.defaultnormal_vertex\n\t" + THREE.ShaderChunk.defaultnormal_vertex + "\n\n\t#ifndef FLAT_SHADED // Normal computed with derivatives when FLAT_SHADED\n\t\tvNormal = normalize( transformedNormal );\n\t#endif\n\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n\n\tvViewPosition = -mvPosition.xyz;\n\n}";
-objects_globe_GlobeMaterial.fragmentShaderStr = "#define PHONG\n\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform vec3 specular;\nuniform float shininess;\nuniform float opacity;\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_fragment\n" + THREE.ShaderChunk.map_pars_fragment + "\n//ShaderChunk.alphamap_pars_fragment\n" + THREE.ShaderChunk.alphamap_pars_fragment + "\n//ShaderChunk.lights_phong_pars_fragment\n" + THREE.ShaderChunk.lights_phong_pars_fragment + "\n//ShaderChunk.bumpmap_pars_fragment\n" + THREE.ShaderChunk.bumpmap_pars_fragment + "\n//ShaderChunk.normalmap_pars_fragment\n" + THREE.ShaderChunk.normalmap_pars_fragment + "\n//ShaderChunk.specularmap_pars_fragment\n" + THREE.ShaderChunk.specularmap_pars_fragment + "\n\nvoid main() {\n\n\tvec3 outgoingLight = vec3( 0.0 );\t// outgoing light does not have an alpha, the surface does\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\n\t//ShaderChunk.map_fragment\n\t" + THREE.ShaderChunk.map_fragment + "\n\t//ShaderChunk.alphamap_fragment\n\t" + THREE.ShaderChunk.alphamap_fragment + "\n\t//ShaderChunk.alphatest_fragment\n\t" + THREE.ShaderChunk.alphatest_fragment + "\n\t//ShaderChunk.specularmap_fragment\n\t" + THREE.ShaderChunk.specularmap_fragment + "\n\n\t//ShaderChunk.lights_phong_fragment\n\t#ifndef FLAT_SHADED\n\t\tvec3 normal = normalize( vNormal );\n\t\t#ifdef DOUBLE_SIDED\n\t\t\tnormal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );\n\t\t#endif\n\t#else\n\t\tvec3 fdx = dFdx( vViewPosition );\n\t\tvec3 fdy = dFdy( vViewPosition );\n\t\tvec3 normal = normalize( cross( fdx, fdy ) );\n\t#endif\n\n\tvec3 viewPosition = normalize( vViewPosition );\n\n\t#ifdef USE_NORMALMAP\n\t\tnormal = perturbNormal2Arb( -vViewPosition, normal );\n\t#elif defined( USE_BUMPMAP )\n\t\tnormal = perturbNormalArb( -vViewPosition, normal, dHdxy_fwd() );\n\t#endif\n\n\tvec3 totalDiffuseLight = vec3( 0.0 );\n\tvec3 totalSpecularLight = vec3( 0.0 );\n\n\t#if MAX_DIR_LIGHTS > 0\n\t \tfor( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {\n\t \n\t \t\tvec3 dirVector = transformDirection( directionalLightDirection[ i ], viewMatrix );\n\t \n\t \t\t// diffuse\n\t \t\tfloat dotProduct = dot( normal, dirVector );\n\n\n\t \t\t//@! phong backside hack\n\t \t\t#define WRAP_AROUND\n\t \t\tvec3 wrapRGB = vec3(1.0, 125./255., 18./255.);\n\t \t\tfloat backsideAmbience = 0.08;\n\t \n\t \t\t#ifdef WRAP_AROUND\n\t \t\t\t//@! doubled dot products\n\t \t\t\tfloat dirDiffuseWeightFull = max( dotProduct, 0.0 );\n\t \t\t\tfloat dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );\n\t \t\t\tvec3 dirDiffuseWeight = mix( vec3( dirDiffuseWeightFull ), vec3( dirDiffuseWeightHalf ), wrapRGB*0.4 + dotProduct*1.2 ) + wrapRGB * backsideAmbience;\n\t \t\t#else\n\t \t\t\tfloat dirDiffuseWeight = max( dotProduct, 0.0 );\n\t \t\t#endif\n\t \n\t \t\ttotalDiffuseLight += directionalLightColor[ i ] * dirDiffuseWeight;\n\t \n\t \t\t// specular\n\t \t\tvec3 dirHalfVector = normalize( dirVector + viewPosition );\n\t \t\tfloat dirDotNormalHalf = max( dot( normal, dirHalfVector ), 0.0 );\n\t \t\tfloat dirSpecularWeight = specularStrength * max( pow( dirDotNormalHalf, shininess ), 0.0 );\t \n\t \t\tfloat specularNormalization = ( shininess + 2.0 ) / 8.0;\n\n\t \t\tvec3 schlick = specular + vec3( 1.0 - specular ) * pow( max( 1.0 - dot( dirVector, dirHalfVector ), 0.0 ), 5.0 );\n\t \t\ttotalSpecularLight += schlick * directionalLightColor[ i ] * dirSpecularWeight * dirDiffuseWeight * specularNormalization;\n\t \t}\n\t#endif\n\n\toutgoingLight += diffuseColor.rgb * ( totalDiffuseLight + ambientLightColor ) + totalSpecularLight + emissive;\n\n\t//ShaderChunk.linear_to_gamma_fragment\n\t" + THREE.ShaderChunk.linear_to_gamma_fragment + "\n\n\tgl_FragColor = vec4( outgoingLight, diffuseColor.a );\t// TODO, this should be pre-multiplied to allow for bright highlights on very transparent objects\n\n}";
-objects_migration_MigrationPathMaterial.vertexShaderStr = "varying vec2 vUv;\n\n\nvoid main() {\n\tvUv = uv;\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n}";
-objects_migration_MigrationPathMaterial.fragmentShaderStr = "uniform float offset;\nuniform float lengthScale;\n\nvarying vec2 vUv;\n\nvoid main() {\n\t// vec3 c = vec3(0);\n\t\n\tfloat x = 0.5;\n\tfloat a = smoothstep(0., x, vUv.y);\n\tfloat b = smoothstep(0., x, 1. - vUv.y);\n\n\t//end curve\n\tfloat p = 0.988;\n\n\tfloat u = (vUv.x*lengthScale - offset*lengthScale);\n\n    float f = smoothstep(1.0, p, u);\n    float k = smoothstep(0., 1. - p, vUv.x);//special, can ignore for now\n\n\tfloat i = a * b * f * k;\n\ti *= i * (u);\n\n\n\n\tvec3 c = vec3(\n\t\t1.0,\n\t\t0.25,\n\t\t0.0\n\t);\n\n\t// c = vec3(0.1, 0.7, 1.0);\n\t//increase intensity toward the middle\n\tc *= c*i + vec3(1.0);\n\tc += vec3(1.0)*i*i;\n\tgl_FragColor = vec4(c * i, i);\n}";
+objects_globe_GlobeMaterial.fragmentShaderStr = "#define PHONG\n\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform vec3 specular;\nuniform float shininess;\nuniform float opacity;\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_fragment\n" + THREE.ShaderChunk.map_pars_fragment + "\n//ShaderChunk.alphamap_pars_fragment\n" + THREE.ShaderChunk.alphamap_pars_fragment + "\n//ShaderChunk.lights_phong_pars_fragment\n" + THREE.ShaderChunk.lights_phong_pars_fragment + "\n//ShaderChunk.bumpmap_pars_fragment\n" + THREE.ShaderChunk.bumpmap_pars_fragment + "\n//ShaderChunk.normalmap_pars_fragment\n" + THREE.ShaderChunk.normalmap_pars_fragment + "\n//ShaderChunk.specularmap_pars_fragment\n" + THREE.ShaderChunk.specularmap_pars_fragment + "\n\nvoid main() {\n\n\tvec3 outgoingLight = vec3( 0.0 );\t// outgoing light does not have an alpha, the surface does\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\n\t//ShaderChunk.map_fragment\n\t" + THREE.ShaderChunk.map_fragment + "\n\t//ShaderChunk.alphamap_fragment\n\t" + THREE.ShaderChunk.alphamap_fragment + "\n\t//ShaderChunk.alphatest_fragment\n\t" + THREE.ShaderChunk.alphatest_fragment + "\n\t//ShaderChunk.specularmap_fragment\n\t" + THREE.ShaderChunk.specularmap_fragment + "\n\n\t//ShaderChunk.lights_phong_fragment\n\t#ifndef FLAT_SHADED\n\t\tvec3 normal = normalize( vNormal );\n\t\t#ifdef DOUBLE_SIDED\n\t\t\tnormal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );\n\t\t#endif\n\t#else\n\t\tvec3 fdx = dFdx( vViewPosition );\n\t\tvec3 fdy = dFdy( vViewPosition );\n\t\tvec3 normal = normalize( cross( fdx, fdy ) );\n\t#endif\n\n\tvec3 viewPosition = normalize( vViewPosition );\n\n\t#ifdef USE_NORMALMAP\n\t\tnormal = perturbNormal2Arb( -vViewPosition, normal );\n\t#elif defined( USE_BUMPMAP )\n\t\tnormal = perturbNormalArb( -vViewPosition, normal, dHdxy_fwd() );\n\t#endif\n\n\tvec3 totalDiffuseLight = vec3( 0.0 );\n\tvec3 totalSpecularLight = vec3( 0.0 );\n\n\t#if MAX_DIR_LIGHTS > 0\n\t \tfor( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {\n\t \n\t \t\tvec3 dirVector = transformDirection( directionalLightDirection[ i ], viewMatrix );\n\t \n\t \t\t// diffuse\n\t \t\tfloat dotProduct = dot( normal, dirVector );\n\n\n\t \t\t//@! phong backside hack\n\t \t\t#define WRAP_AROUND\n\t \t\tvec3 wrapRGB = vec3(1.0, 125./255., 18./255.);\n\t \t\tfloat backsideAmbience = 0.04;\n\t \n\t \t\t#ifdef WRAP_AROUND\n\t \t\t\t//@! doubled dot products\n\t \t\t\tfloat dirDiffuseWeightFull = max( dotProduct, 0.0 );\n\t \t\t\tfloat dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );\n\t \t\t\tvec3 dirDiffuseWeight = mix( vec3( dirDiffuseWeightFull ), vec3( dirDiffuseWeightHalf ), clamp(wrapRGB*0.4 + dotProduct*1.2, 0., 1.) ) + wrapRGB * backsideAmbience;\n\t \t\t#else\n\t \t\t\tfloat dirDiffuseWeight = max( dotProduct, 0.0 );\n\t \t\t#endif\n\t \n\t \t\ttotalDiffuseLight += directionalLightColor[ i ] * dirDiffuseWeight;\n\t \n\t \t\t// specular\n\t \t\tvec3 dirHalfVector = normalize( dirVector + viewPosition );\n\t \t\tfloat dirDotNormalHalf = max( dot( normal, dirHalfVector ), 0.0 );\n\t \t\tfloat dirSpecularWeight = specularStrength * max( pow( dirDotNormalHalf, shininess ), 0.0 );\t \n\t \t\tfloat specularNormalization = ( shininess + 2.0 ) / 8.0;\n\n\t \t\tvec3 schlick = specular + vec3( 1.0 - specular ) * pow( max( 1.0 - dot( dirVector, dirHalfVector ), 0.0 ), 5.0 );\n\t \t\ttotalSpecularLight += schlick * directionalLightColor[ i ] * dirSpecularWeight * dirDiffuseWeight * specularNormalization;\n\t \t}\n\t#endif\n\n\toutgoingLight += diffuseColor.rgb * ( totalDiffuseLight + ambientLightColor ) + totalSpecularLight + emissive;\n\n\t//ShaderChunk.linear_to_gamma_fragment\n\t" + THREE.ShaderChunk.linear_to_gamma_fragment + "\n\n\tgl_FragColor = vec4( outgoingLight, diffuseColor.a );\t// TODO, this should be pre-multiplied to allow for bright highlights on very transparent objects\n\n}";
+objects_migration_MigrationPathMaterial.vertexShaderStr = "varying vec2 vUv;\nvarying vec2 vNUv;\n\n\nvoid main() {\n\tvUv = uv;\n\tvNUv = uv2;\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n}";
+objects_migration_MigrationPathMaterial.fragmentShaderStr = "uniform float progress;\nuniform float scale;\nuniform vec3 color;\n\nvarying vec2 vUv;\nvarying vec2 vNUv;\n\nvoid main() {\n\t\n\tconst float end = 0.988;\n\tconst float stepMax = 0.6;\n\n\tfloat a = smoothstep(0., stepMax, vNUv.y);\n\tfloat b = smoothstep(0., stepMax, 1. - vNUv.y);\n    float c = smoothstep(1.0, end, vNUv.x) * smoothstep(0., 1. - end, vNUv.x);//special, can ignore for now\n\n    float ab = a*b;\n\n\tfloat u = vUv.x*scale - (progress*(scale) - 1.);\n\tfloat nu = vNUv.x*scale - (progress*(scale) - 1.);\n\n    float f = smoothstep(1.0, end, nu);\n\n\tfloat i = clamp(ab * c * f * nu * nu, 0., 1.);\n\n\tvec3 col = color;\n\t//increase intensity toward the middle\n\tconst float darkenFactor = 0.5;\n\tcol *= nu * darkenFactor + (1. - darkenFactor);//darken towards end\n\n\tcol += vec3(1.0)*i * nu * nu * nu * ab * ab * ab * ab;\n\t\n\tgl_FragColor = vec4(col, i);\n\t//premultiply alpha\n\tgl_FragColor.rgb *= gl_FragColor.a;\n}";
 Main.main();
 })(typeof window != "undefined" ? window : exports, typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);
