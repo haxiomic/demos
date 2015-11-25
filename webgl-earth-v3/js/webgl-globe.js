@@ -108,7 +108,7 @@ Debug.init = function() {
 	};
 	tmp1 = handleGeoJsonObject1;
 	var handleGeoJsonObject = tmp1;
-	var request = new haxe_Http("_raw-data/vector/coastline-lines-110m/topojson.json");
+	var request = new haxe_Http("assets/earth/vectors/coastline-lowres/topojson.json");
 	request.onData = function(content) {
 		var t = JSON.parse(content);
 		var _g3 = 0;
