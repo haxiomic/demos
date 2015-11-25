@@ -2501,7 +2501,7 @@ var objects_globe_Globe = function(renderer,radius,assetRoot) {
 	this.overlay1Material = new THREE.MeshLambertMaterial({ transparent : true, opacity : 1.0});
 	this.overlay1Mesh = new THREE.Mesh(earthGeom,this.overlay1Material);
 	this.earthMesh.add(this.overlay1Mesh);
-	this.overlay2Material = new THREE.MeshLambertMaterial({ transparent : true, opacity : 1.0, blending : THREE.AdditiveBlending});
+	this.overlay2Material = new THREE.MeshLambertMaterial({ transparent : true, opacity : 0.35, blending : THREE.AdditiveBlending});
 	this.overlay2Mesh = new THREE.Mesh(earthGeom,this.overlay2Material);
 	this.earthMesh.add(this.overlay2Mesh);
 	objects_globe_PackedData.load("" + assetRoot + "/earth/climate-data/wind-surface-packed-0.25.png",function(data) {
@@ -2513,6 +2513,7 @@ var objects_globe_Globe = function(renderer,radius,assetRoot) {
 		_g.overlay1Material.needsUpdate = true;
 		_g.overlay2Material.map = _g.windFlowMap.renderTarget;
 		_g.overlay2Material.needsUpdate = true;
+		Debug.testPlaneMat.map = _g.windFlowMap.renderTarget;
 	});
 	if(this.atmosphereEnabled) {
 		this.atmosphere = new objects_globe_Atmosphere(radius * (1 + this.atmospherePad),radius * (this.atmosphereHeight + 1));
@@ -2815,26 +2816,74 @@ objects_globe_PackedData.load = function(mapUrl,onReady) {
 objects_globe_PackedData.prototype = {
 	__class__: objects_globe_PackedData
 };
+var render_ShaderPass = function(renderer,width,height,options) {
+	this.renderer = renderer;
+	this.camera = render_ShaderPass.staticCamera;
+	this.planeGeom = render_ShaderPass.staticPlaneGeom;
+	this.renderTarget = new THREE.WebGLRenderTarget(width,height,options);
+	this.scene = new THREE.Scene();
+	this.quad = new THREE.Mesh(this.planeGeom,null);
+	this.scene.add(this.quad);
+};
+render_ShaderPass.__name__ = true;
+render_ShaderPass.prototype = {
+	render: function(forceClear) {
+		if(forceClear == null) forceClear = false;
+		this.renderer.render(this.scene,this.camera,this.renderTarget,forceClear);
+	}
+	,setMaterial: function(material) {
+		this.quad.material = material;
+	}
+	,__class__: render_ShaderPass
+};
+var render_ShaderPass2Phase = function(renderer,width,height,options) {
+	render_ShaderPass.call(this,renderer,width,height,options);
+	this.readTarget = this.renderTarget;
+	this.writeTarget = this.renderTarget.clone();
+};
+render_ShaderPass2Phase.__name__ = true;
+render_ShaderPass2Phase.__super__ = render_ShaderPass;
+render_ShaderPass2Phase.prototype = $extend(render_ShaderPass.prototype,{
+	render: function(forceClear) {
+		if(forceClear == null) forceClear = false;
+		this.renderer.render(this.scene,this.camera,this.writeTarget,forceClear);
+		var tmp = this.readTarget;
+		this.readTarget = this.writeTarget;
+		this.writeTarget = tmp;
+	}
+	,swapTargets: function() {
+		var tmp = this.readTarget;
+		this.readTarget = this.writeTarget;
+		this.writeTarget = tmp;
+	}
+	,__class__: render_ShaderPass2Phase
+});
 var objects_globe_WindFlowMap = function(renderer,packedVelocities,particleCountPOT) {
 	if(particleCountPOT == null) particleCountPOT = 18;
-	this.renderer = renderer;
-	this.renderTarget = new THREE.WebGLRenderTarget(4096,2048,{ format : THREE.RGBAFormat, type : THREE.UnsignedByteType, wrapS : THREE.ClampToEdgeWrapping, wrapT : THREE.ClampToEdgeWrapping, minFilter : THREE.LinearFilter, magFilter : THREE.LinearFilter, anisotropy : Math.max(4,renderer.getMaxAnisotropy()), depthBuffer : false, stencilBuffer : false});
+	render_ShaderPass2Phase.call(this,renderer,4096,2048,{ format : THREE.RGBAFormat, type : THREE.UnsignedByteType, wrapS : THREE.ClampToEdgeWrapping, wrapT : THREE.ClampToEdgeWrapping, minFilter : THREE.LinearFilter, magFilter : THREE.LinearFilter, anisotropy : Math.max(4,renderer.getMaxAnisotropy()), depthBuffer : false, stencilBuffer : false});
 	this.particles = new objects_globe__$WindFlowMap_FlowParticles(renderer,packedVelocities,particleCountPOT);
 	this.particleRenderObject = new objects_globe__$WindFlowMap_ParticleRenderObject(renderer,this.particles);
+	this.processLastFrame = new THREE.ShaderMaterial({ vertexShader : shaderlib_Shaders.basic_uv, fragmentShader : objects_globe_WindFlowMap.processLastFrameFragment, uniforms : { lastFrame : { type : "t", value : null}}});
 };
 objects_globe_WindFlowMap.__name__ = true;
-objects_globe_WindFlowMap.prototype = {
+objects_globe_WindFlowMap.__super__ = render_ShaderPass2Phase;
+objects_globe_WindFlowMap.prototype = $extend(render_ShaderPass2Phase.prototype,{
 	step: function(dt_s) {
 		this.particles.step(dt_s);
 	}
 	,render: function(forceClear) {
-		if(forceClear == null) forceClear = true;
+		if(forceClear == null) forceClear = false;
+		this.processLastFrame.uniforms.lastFrame.value = this.readTarget;
+		this.quad.material = this.processLastFrame;
+		this.renderer.render(this.scene,this.camera,this.writeTarget,forceClear);
 		this.renderer.setRenderTarget(this.renderTarget);
-		if(forceClear) this.renderer.clear(true);
 		this.particleRenderObject.render();
+		var tmp = this.readTarget;
+		this.readTarget = this.writeTarget;
+		this.writeTarget = tmp;
 	}
 	,__class__: objects_globe_WindFlowMap
-};
+});
 var shaderlib_Chunks = function() { };
 shaderlib_Chunks.__name__ = true;
 var objects_globe__$WindFlowMap_ParticleRenderObject = function(renderer,particles) {
@@ -2882,46 +2931,6 @@ objects_globe__$WindFlowMap_ParticleRenderObject.prototype = $extend(THREE.Objec
 		gl.drawArrays(0,0,this.particles.count);
 	}
 	,__class__: objects_globe__$WindFlowMap_ParticleRenderObject
-});
-var render_ShaderPass = function(renderer,width,height,options) {
-	this.renderer = renderer;
-	this.renderTarget = new THREE.WebGLRenderTarget(width,height,options);
-	this.scene = new THREE.Scene();
-	this.quad = new THREE.Mesh(render_ShaderPass.planeGeom,null);
-	this.scene.add(this.quad);
-};
-render_ShaderPass.__name__ = true;
-render_ShaderPass.prototype = {
-	render: function(forceClear) {
-		if(forceClear == null) forceClear = false;
-		this.renderer.render(this.scene,render_ShaderPass.camera,this.renderTarget,forceClear);
-	}
-	,setMaterial: function(material) {
-		this.quad.material = material;
-	}
-	,__class__: render_ShaderPass
-};
-var render_ShaderPass2Phase = function(renderer,width,height,options) {
-	render_ShaderPass.call(this,renderer,width,height,options);
-	this.readTarget = this.renderTarget;
-	this.writeTarget = this.renderTarget.clone();
-};
-render_ShaderPass2Phase.__name__ = true;
-render_ShaderPass2Phase.__super__ = render_ShaderPass;
-render_ShaderPass2Phase.prototype = $extend(render_ShaderPass.prototype,{
-	render: function(forceClear) {
-		if(forceClear == null) forceClear = false;
-		this.renderer.render(this.scene,render_ShaderPass.camera,this.writeTarget,forceClear);
-		var tmp = this.readTarget;
-		this.readTarget = this.writeTarget;
-		this.writeTarget = tmp;
-	}
-	,swapTargets: function() {
-		var tmp = this.readTarget;
-		this.readTarget = this.writeTarget;
-		this.writeTarget = tmp;
-	}
-	,__class__: render_ShaderPass2Phase
 });
 var objects_globe__$WindFlowMap_FlowParticles = function(renderer,packedVelocities,countPOT) {
 	if(countPOT % 2 != 0) {
@@ -3095,19 +3104,20 @@ objects_globe_AtmosphereOuterMaterial.fragmentShaderStr = "//\n// Atmospheric sc
 objects_globe_Globe.earthSegments = 80;
 objects_globe_GlobeMaterial.vertexShaderStr = "#define PHONG\nvarying vec3 vViewPosition;\n#ifndef FLAT_SHADED\n\tvarying vec3 vNormal;\n#endif\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_vertex\n" + THREE.ShaderChunk.map_pars_vertex + "\n\nvoid main() {\n\n\t//ShaderChunk.map_vertex\n\t" + THREE.ShaderChunk.map_vertex + "\n\n\t//ShaderChunk.defaultnormal_vertex\n\t" + THREE.ShaderChunk.defaultnormal_vertex + "\n\n\t#ifndef FLAT_SHADED // Normal computed with derivatives when FLAT_SHADED\n\t\tvNormal = normalize( transformedNormal );\n\t#endif\n\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n\n\tvViewPosition = -mvPosition.xyz;\n\n}";
 objects_globe_GlobeMaterial.fragmentShaderStr = "#define PHONG\n\nuniform vec3 diffuse;\nuniform vec3 emissive;\nuniform vec3 specular;\nuniform float shininess;\nuniform float opacity;\n\n//ShaderChunk.common\n" + THREE.ShaderChunk.common + "\n//ShaderChunk.map_pars_fragment\n" + THREE.ShaderChunk.map_pars_fragment + "\n//ShaderChunk.alphamap_pars_fragment\n" + THREE.ShaderChunk.alphamap_pars_fragment + "\n//ShaderChunk.lights_phong_pars_fragment\n" + THREE.ShaderChunk.lights_phong_pars_fragment + "\n//ShaderChunk.bumpmap_pars_fragment\n" + THREE.ShaderChunk.bumpmap_pars_fragment + "\n//ShaderChunk.normalmap_pars_fragment\n" + THREE.ShaderChunk.normalmap_pars_fragment + "\n//ShaderChunk.specularmap_pars_fragment\n" + THREE.ShaderChunk.specularmap_pars_fragment + "\n\nvoid main() {\n\n\tvec3 outgoingLight = vec3( 0.0 );\t// outgoing light does not have an alpha, the surface does\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n\n\t//ShaderChunk.map_fragment\n\t" + THREE.ShaderChunk.map_fragment + "\n\t//ShaderChunk.alphamap_fragment\n\t" + THREE.ShaderChunk.alphamap_fragment + "\n\t//ShaderChunk.alphatest_fragment\n\t" + THREE.ShaderChunk.alphatest_fragment + "\n\t//ShaderChunk.specularmap_fragment\n\t" + THREE.ShaderChunk.specularmap_fragment + "\n\n\t//ShaderChunk.lights_phong_fragment\n\t#ifndef FLAT_SHADED\n\t\tvec3 normal = normalize( vNormal );\n\t\t#ifdef DOUBLE_SIDED\n\t\t\tnormal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );\n\t\t#endif\n\t#else\n\t\tvec3 fdx = dFdx( vViewPosition );\n\t\tvec3 fdy = dFdy( vViewPosition );\n\t\tvec3 normal = normalize( cross( fdx, fdy ) );\n\t#endif\n\n\tvec3 viewPosition = normalize( vViewPosition );\n\n\t#ifdef USE_NORMALMAP\n\t\tnormal = perturbNormal2Arb( -vViewPosition, normal );\n\t#elif defined( USE_BUMPMAP )\n\t\tnormal = perturbNormalArb( -vViewPosition, normal, dHdxy_fwd() );\n\t#endif\n\n\tvec3 totalDiffuseLight = vec3( 0.0 );\n\tvec3 totalSpecularLight = vec3( 0.0 );\n\n\t#if MAX_DIR_LIGHTS > 0\n\t \tfor( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {\n\t \n\t \t\tvec3 dirVector = transformDirection( directionalLightDirection[ i ], viewMatrix );\n\t \n\t \t\t// diffuse\n\t \t\tfloat dotProduct = dot( normal, dirVector );\n\n\n\t \t\t//@! phong backside hack\n\t \t\t#define WRAP_AROUND\n\t \t\tvec3 wrapRGB = vec3(1.0, 125./255., 18./255.);\n\t \t\tfloat backsideAmbience = 0.04;\n\t \n\t \t\t#ifdef WRAP_AROUND\n\t \t\t\t//@! doubled dot products\n\t \t\t\tfloat dirDiffuseWeightFull = max( dotProduct, 0.0 );\n\t \t\t\tfloat dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );\n\t \t\t\tvec3 dirDiffuseWeight = mix( vec3( dirDiffuseWeightFull ), vec3( dirDiffuseWeightHalf ), clamp(wrapRGB*0.4 + dotProduct*1.2, 0., 1.) ) + wrapRGB * backsideAmbience;\n\t \t\t#else\n\t \t\t\tfloat dirDiffuseWeight = max( dotProduct, 0.0 );\n\t \t\t#endif\n\t \n\t \t\ttotalDiffuseLight += directionalLightColor[ i ] * dirDiffuseWeight;\n\t \n\t \t\t// specular\n\t \t\tvec3 dirHalfVector = normalize( dirVector + viewPosition );\n\t \t\tfloat dirDotNormalHalf = max( dot( normal, dirHalfVector ), 0.0 );\n\t \t\tfloat dirSpecularWeight = specularStrength * max( pow( dirDotNormalHalf, shininess ), 0.0 );\t \n\t \t\tfloat specularNormalization = ( shininess + 2.0 ) / 8.0;\n\n\t \t\tvec3 schlick = specular + vec3( 1.0 - specular ) * pow( max( 1.0 - dot( dirVector, dirHalfVector ), 0.0 ), 5.0 );\n\t \t\ttotalSpecularLight += schlick * directionalLightColor[ i ] * dirSpecularWeight * dirDiffuseWeight * specularNormalization;\n\t \t}\n\t#endif\n\n\toutgoingLight += diffuseColor.rgb * ( totalDiffuseLight + ambientLightColor ) + totalSpecularLight + emissive;\n\n\t//ShaderChunk.linear_to_gamma_fragment\n\t" + THREE.ShaderChunk.linear_to_gamma_fragment + "\n\n\tgl_FragColor = vec4( outgoingLight, diffuseColor.a );\t// TODO, this should be pre-multiplied to allow for bright highlights on very transparent objects\n\n}";
-shaderlib_Chunks.basic_gl_position = "gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);";
+render_ShaderPass.staticCamera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+render_ShaderPass.staticPlaneGeom = new THREE.PlaneBufferGeometry(2,2,1,1);
+objects_globe_WindFlowMap.processLastFrameFragment = "\nuniform sampler2D lastFrame;\nvarying vec2 vUv;\n\nvoid main(){\n\tvec4 l = texture2D(lastFrame, vUv);\n\n\tl *= 0.98;\n\n\tgl_FragColor = l;\n}\n";
+shaderlib_Chunks.basic_projection = "gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);";
 shaderlib_Chunks.float_packing = "//Float Packing\nvec4 packFloat8bitRGBA(in float val) {\n    vec4 pack = vec4(1.0, 255.0, 65025.0, 16581375.0) * val;\n    pack = fract(pack);\n    pack -= vec4(pack.yzw / 255.0, 0.0);\n    return pack;\n}\n\nfloat unpackFloat8bitRGBA(in vec4 pack) {\n    return dot(pack, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0));\n}\n\nvec3 packFloat8bitRGB(in float val) {\n    vec3 pack = vec3(1.0, 255.0, 65025.0) * val;\n    pack = fract(pack);\n    pack -= vec3(pack.yz / 255.0, 0.0);\n    return pack;\n}\n\nfloat unpackFloat8bitRGB(in vec3 pack) {\n    return dot(pack, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));\n}\n\nvec2 packFloat8bitRG(in float val) {\n    vec2 pack = vec2(1.0, 255.0) * val;\n    pack = fract(pack);\n    pack -= vec2(pack.y / 255.0, 0.0);\n    return pack;\n}\n\nfloat unpackFloat8bitRG(in vec2 pack) {\n    return dot(pack, vec2(1.0, 1.0 / 255.0));\n}";
 objects_globe__$WindFlowMap_ParticleRenderObject.vertexShaderStr = "\nattribute vec2 lookUpUV;\nuniform sampler2D positions;\n\n" + ("" + shaderlib_Chunks.float_packing + "\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n") + "\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(positions, lookUpUV));\n\n\tgl_PointSize = 2.;\n\n\tgl_Position = vec4(p*2.0 - 1.0, 0., 1.0);\n}\n";
 objects_globe__$WindFlowMap_ParticleRenderObject.fragmentShaderStr = "\nvoid main(){\n\tgl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n}\n";
 objects_globe__$WindFlowMap_ParticleRenderObject.dummyCamera = new THREE.Camera();
-render_ShaderPass.camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
-render_ShaderPass.planeGeom = new THREE.PlaneBufferGeometry(2,2,1,1);
 objects_globe__$WindFlowMap_FlowParticles.initialConditionsFragment = "\nvarying vec2 vUv;\n\n" + ("" + shaderlib_Chunks.float_packing + "\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n") + "\n\nvoid main(){\n\tvec2 p = vUv;//particle position\n\tgl_FragColor = packParticlePosition(p);\n}\n";
-objects_globe__$WindFlowMap_FlowParticles.positionStepFragment = "\nvarying vec2 vUv;\n\nuniform sampler2D windVelocities;\nuniform sampler2D particlePositions;\nuniform float dt_s;\nuniform float randomSeed;\n\n" + ("" + shaderlib_Chunks.float_packing + "\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n") + "\n" + "//Requires defines:\n//WIND_PACK_OFFSET :FLOAT\n//WIND_PACK_INV_SCALE :FLOAT\nvec2 unpackWindVelocity(vec4 pack){\n\tvec2 u = vec2(unpackFloat8bitRG(pack.rg), unpackFloat8bitRG(pack.ba));\n\tconst vec2 offset = vec2(WIND_PACK_OFFSET);\n\tu = (u * WIND_PACK_INV_SCALE) - offset;\n\treturn u;\n}" + "\n\nfloat rand(vec2 co){\n    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);\n}\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(particlePositions, vUv));\n\tvec2 wv = unpackWindVelocity(texture2D(windVelocities, p));\n\n\tvec2 v = wv / 800.;\n\n\t//euler step\n\tp = p + v * dt_s;\n\n\t//reset position\n\tif(rand((p+vUv)*randomSeed) < 0.005){\n\t\tp = vUv;\n\t}\n\n\tp = mod(p, 1.0);\n\n\n\tgl_FragColor = packParticlePosition(p);\n}\n";
+objects_globe__$WindFlowMap_FlowParticles.positionStepFragment = "\nvarying vec2 vUv;\n\nuniform sampler2D windVelocities;\nuniform sampler2D particlePositions;\nuniform float dt_s;\nuniform float randomSeed;\n\n" + ("" + shaderlib_Chunks.float_packing + "\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n") + "\n" + "//Requires defines:\n//WIND_PACK_OFFSET :FLOAT\n//WIND_PACK_INV_SCALE :FLOAT\nvec2 unpackWindVelocity(vec4 pack){\n\tvec2 u = vec2(unpackFloat8bitRG(pack.rg), unpackFloat8bitRG(pack.ba));\n\tconst vec2 offset = vec2(WIND_PACK_OFFSET);\n\tu = (u * WIND_PACK_INV_SCALE) - offset;\n\treturn u;\n}" + "\n\nvec2 cartesianToAngularVelocity(in vec2 cv){\n\t//@! todo\n\treturn cv;\n}\n\nfloat rand(vec2 co){\n    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);\n}\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(particlePositions, vUv));\n\tvec2 wv = unpackWindVelocity(texture2D(windVelocities, p));\n\n\tvec2 v = cartesianToAngularVelocity(wv) / 800.;\n\n\t//euler step\n\tp = p + v * dt_s;\n\n\t//reset position\n\tif(rand((p+vUv)*randomSeed) < 0.005){\n\t\tp = vUv;\n\t}\n\n\t//wrap positions\n\tp = mod(p, 1.0);\n\n\tgl_FragColor = packParticlePosition(p);\n}\n";
 objects_globe_WindIntensityMap.fragmentShaderStr = "uniform sampler2D windVelocities;\n\nvarying vec2 vUv;\n\n" + shaderlib_Chunks.float_packing + "\n\n//iq color palette function\nvec3 pal( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ){\n    return a + b*cos( 6.28318*(c*t+d) );\n}\n\n" + "//Requires defines:\n//WIND_PACK_OFFSET :FLOAT\n//WIND_PACK_INV_SCALE :FLOAT\nvec2 unpackWindVelocity(vec4 pack){\n\tvec2 u = vec2(unpackFloat8bitRG(pack.rg), unpackFloat8bitRG(pack.ba));\n\tconst vec2 offset = vec2(WIND_PACK_OFFSET);\n\tu = (u * WIND_PACK_INV_SCALE) - offset;\n\treturn u;\n}" + "\n\nvoid main(){\n\tvec4 pack = texture2D(windVelocities, vUv);\n\n\tvec2 vel = unpackWindVelocity(pack);\n\n\tfloat x = clamp(length(vel)/50., 0., 1.);\n\t// x = pow(x,);\n\tgl_FragColor = vec4(\n\t\t//red-yellow\n\t\t//pal( x, vec3(0.8,0.5,0.4),vec3(0.2,0.4,0.2),vec3(2.0,1.0,1.0),vec3(0.0,0.25,0.25) ),\n\t\t//rainbow\n\t\t// pal( 1. - x, vec3(0.5,0.5,0.5),vec3(0.5,0.5,0.5),vec3(1.0,1.0,1.0)*1.3,vec3(0.0,0.33,0.67)*2. ),\n\t\t//rainbow 2\n\t\t// pal(x,vec3(0.55,0.4,0.3),vec3(0.50,0.51,0.35)+0.1,vec3(0.8,0.75,0.8),vec3(0.075,0.33,0.67)+0.21),\n\t\t//black->blue->white\n\t\t// pal(x,vec3(0.55),vec3(0.8),vec3(0.29),vec3(0.00,0.05,0.15) + 0.54 ),\n\t\t//black->blue->white 2\n\t\tpal(pow(x, .5) ,vec3(0.5),vec3(0.55),vec3(0.45),vec3(0.00,0.10,0.20) + 0.47 ),\n\t\t//\n\t\t// pal(1.-x,vec3(0.5),vec3(0.5),vec3(0.9),vec3(0.3,0.20,0.20) + 0.31 ),\n\t\t1.0\n\t);\n}";
 objects_migrationpath_MigrationPathMaterial.vertexShaderStr = "varying vec2 vUv;\nvarying vec2 vNUv;\n\n\nvoid main() {\n\tvUv = uv;\n\tvNUv = uv2;\n\t//ShaderChunk.default_vertex\n\t" + THREE.ShaderChunk.default_vertex + "\n}";
 objects_migrationpath_MigrationPathMaterial.fragmentShaderStr = "uniform float progress;\nuniform float scale;\nuniform vec3 color;\n\nvarying vec2 vUv;\nvarying vec2 vNUv;\n\nvoid main() {\n\t\n\tconst float end = 0.988;\n\tconst float stepMax = 0.6;\n\n\tfloat a = smoothstep(0., stepMax, vNUv.y);\n\tfloat b = smoothstep(0., stepMax, 1. - vNUv.y);\n    float c = smoothstep(1.0, end, vNUv.x) * smoothstep(0., 1. - end, vNUv.x);//special, can ignore for now\n\n    float ab = a*b;\n\n\tfloat u = vUv.x*scale - (progress*(scale) - 1.);\n\tfloat nu = vNUv.x*scale - (progress*(scale) - 1.);\n\n    float f = smoothstep(1.0, end, nu);\n\n\tfloat i = clamp(ab * c * f * nu * nu, 0., 1.);\n\n\tvec3 col = color;\n\t//increase intensity toward the middle\n\tconst float darkenFactor = 0.5;\n\tcol *= nu * darkenFactor + (1. - darkenFactor);//darken towards end\n\n\tcol += vec3(1.0)*i * nu * nu * nu * ab * ab * ab * ab;\n\t\n\tgl_FragColor = vec4(col, i);\n\t//premultiply alpha\n\tgl_FragColor.rgb *= gl_FragColor.a;\n}";
-shaderlib_Shaders.basic_uv = "varying vec2 vUv;\n\nvoid main(){\n\tvUv = uv;\n\t" + shaderlib_Chunks.basic_gl_position + "\n}";
+shaderlib_Shaders.basic_uv = "varying vec2 vUv;\n\nvoid main(){\n\tvUv = uv;\n\t" + shaderlib_Chunks.basic_projection + "\n}";
 tracks__$AnimalOdysseys_MigrationData.greenTurtle_1 = [[128.223742109622492,-3.77551720427859117,0.],[128.942566361455704,-3.96764015118173585,0.],[130.203537122806409,-3.80865725068304517,0.],[130.894335365741512,-4.18509034537972457,0.],[131.840491974361299,-5.00179621141511088,0.],[133.373085421994602,-4.65140191090676,0.],[134.321730388360692,-4.35214488713413061,0.],[136.121615377530588,-4.84941237952222526,0.],[137.892864310688793,-5.7067545291306061,0.],[138.133890862377712,-6.95413833305809437,0.],[137.1670458351349,-8.39870484063325407,0.],[137.685337300817508,-8.68751709648837434,0.],[139.064923512616588,-8.73999348067523663,0.],[139.761772247802611,-8.52159789195962603,0.],[140.719948227595694,-9.21989486544554104,0.],[141.412490052927211,-9.61734775265083464,0.],[142.043479489131414,-9.59537273528240675,0.],[142.68388313242761,-9.5934179255737444,0.],[143.083063574397,-9.59972852654614,0.],[143.665696828373,-9.91203083736769486,0.],[144.077436461805405,-10.1197844674642408,0.],[144.140741195214,-10.8817074104718898,0.],[144.168084419165609,-11.8910266028715199,0.],[144.344545008000495,-12.4254955036709909,0.]];
 tracks__$AnimalOdysseys_MigrationData.shearwater_6 = [[152.184940059344797,-23.7797221152731417,0.],[152.79048146222911,-21.3251537000646,0.],[153.253587411839,-20.1162798391596311,0.],[153.413437443270396,-19.5663260349373296,0.],[152.552020625849906,-17.6295680834658697,0.],[154.017103430970593,-17.4820101502993204,0.],[156.002487332836893,-15.1840305180596,0.],[159.118178710197213,-16.1693975622160906,0.],[161.655719240839602,-14.1105309356667892,0.],[161.096799167363201,-11.1987349517236208,0.],[161.262921373864,-7.9378052833499062,0.],[160.3539582609,-6.45096554330528438,0.],[163.376290131206588,-4.74549737934446902,0.],[163.897104855531296,-2.47733367686286687,0.],[163.927810967225895,0.121939925470569796,0.],[162.278133306834093,3.50562595386516218,0.],[163.551540860581611,8.32369679733179879,0.],[156.713435339999904,6.05799239986102478,0.],[153.179421995300288,9.05124498391147903,0.],[150.792702923505487,12.2021437628735594,0.],[148.254057772837911,13.8822544452015801,0.],[145.930829868803613,14.5635220813568207,0.],[145.272797782494592,16.5993343486485792,0.],[143.577737935277,16.8090479605936,0.],[142.122372007503714,14.6270112174212699,0.],[144.62612901823681,12.1507490866745496,0.],[147.529979056109113,12.2572211214310407,0.],[146.755127781772302,10.5821789602452707,0.],[145.969337145050787,6.97351894050421528,0.],[144.3930840872776,6.17053041903239308,0.],[144.3865223137702,7.82426851463186,0.],[142.41837030444529,8.78319363741127823,0.],[141.061080134768304,9.59664897387753868,0.],[140.692064887579789,10.5139223481632804,0.],[142.500349442506604,10.9587145639307497,0.],[146.966110389732705,14.3379613209709493,0.]];
 tracks__$AnimalOdysseys_MigrationData.greenTurtle_4 = [[167.317514265076795,-16.5083917851314794,0.],[166.544657200169496,-16.0760562200316315,0.],[166.190449351759696,-15.4147014072360893,0.],[166.126823992140203,-14.8498339204080896,0.],[165.894407923475711,-14.1197769382726097,0.],[165.684475105760811,-13.1467915362352397,0.],[165.628221407271695,-12.5192412978801606,0.],[165.313891440739496,-11.9439717721211593,0.],[164.88772468014929,-11.3079651599581794,0.],[164.23576768195,-11.0708299915886101,0.],[162.74232940524891,-11.2994289608601797,0.],[160.80969319907129,-12.1615699695221195,0.],[159.180503347048301,-12.3077983823291195,0.],[156.753965412619,-12.3071768688812799,0.],[155.793110397752088,-11.8653551111677302,0.],[155.284766532800887,-11.3037062200279195,0.],[154.619183952712689,-11.1557077776411102,0.],[154.020192049970291,-10.9019017091898895,0.],[153.258084277826,-10.9923984949228402,0.],[152.844362589276898,-11.1401359445485,0.],[152.501231232555597,-11.3538346533607299,0.],[151.20435586508,-11.3159890356673305,0.],[150.496266780689297,-11.1249050605586106,0.],[149.749438369001808,-10.8979070577029908,0.],[148.854586819265307,-10.5668743264396792,0.],[147.883605311262897,-10.3695965595862098,0.],[147.051441047714405,-10.3743682502035899,0.],[145.990171551713,-10.4113301799376892,0.],[145.139211543321693,-10.75792175858283,0.],[144.915972071740413,-11.4532663855006795,0.],[144.529260148552595,-12.7779490053603304,0.]];
