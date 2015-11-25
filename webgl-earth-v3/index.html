@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>earth-render</title>
+		<link rel="stylesheet" type="text/css" href="css/app.css">
+	</head>
+	<body>
+		<div id="globe-container">
+			
+		</div>
+
+		<!-- Libs -->
+		<script type="text/javascript" src="lib/three-r71/three.js"></script>
+		<script type="text/javascript" src="lib/three-r71/extras/controls/OrbitControls.js"></script>
+		<script type="text/javascript" src="lib/three-r71/extras/modifiers/SubdivisionModifier.js"></script>
+
+		<!-- App -->
+		<script type="text/javascript" src="js/webgl-globe.js"></script>
+
+		<script type="text/javascript">
+		//pseudo host
+		var globeContainer = document.querySelector('#globe-container');
+		var globe = new Globe(globeContainer);
+		// globe.setTrack('animal-odysseys');
+		</script>
+	</body>
+</html>
