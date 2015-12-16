@@ -38,7 +38,7 @@ Debug.warn = function(msg) {
 Debug.error = function(msg) {
 };
 Debug.init = function() {
-	console.log("renderer.getMaxAnisotropy: " + Debug.m.renderer.getMaxAnisotropy());
+	haxe_Log.trace("renderer.getMaxAnisotropy: " + Debug.m.renderer.getMaxAnisotropy(),{ fileName : "Debug.hx", lineNumber : 71, className : "Debug", methodName : "init"});
 	Debug.camera2d = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 	Debug.scene2d = new THREE.Scene();
 	Debug.debugTex = THREE.ImageUtils.loadTexture("assets/uv-grid.jpg");
@@ -72,6 +72,7 @@ Debug.setupDatGUI = function() {
 	Debug.gui.add(Debug.m,"sunSpringEnabled");
 	Debug.gui.add(Debug.m,"sunSpringK").min(0).max(20);
 	Debug.gui.add(Debug.m,"sunSpringDamp").min(0).max(1);
+	Debug.gui.add(Debug.m.controls,"enabled").name("Mouse Controls");
 	Debug.gui.add(Debug.testPlane.material,"visible").name("Test Plane");
 	Debug.gui.add(Debug.m.globe.atmosphere,"visible").name("Atmosphere");
 	Debug.gui.add(Debug.m.globe.earthMesh.material,"shininess").onChange(function(s) {
@@ -86,13 +87,13 @@ Debug.setupDatGUI = function() {
 		++_g;
 		f(Debug.gui);
 	}
+	Debug.gui.add(Debug.m.globe.gradientOverlayMaterial,"opacity").min(0).max(1).name("Heatmap Overlay");
+	Debug.gui.add(Debug.m.globe.particleOverlayMaterial,"opacity").min(0).max(1).name("Particle Overlay");
 };
 Debug.addOverlaySettings = function(particleFlowMap) {
 	Debug.onDatGUIReady(function(gui) {
 		if(Debug.overlaySettingsAdded) return;
 		Debug.overlaySettingsAdded = true;
-		gui.add(Debug.m.globe.gradientOverlayMaterial,"opacity").min(0).max(1).name("Heatmap Overlay");
-		gui.add(Debug.m.globe.particleOverlayMaterial,"opacity").min(0).max(1).name("Particle Overlay");
 		gui.add(Debug.m.globe,"sequenceSpeed").min(0).max(0.01).step(0.000001).name("Playback Speed");
 		var flowFolder = gui.addFolder("Particle Flow");
 		flowFolder.add(particleFlowMap.processLastFrame.uniforms.halfLife,"value").min(0).max(5).step(0.01).name("Decay Half Life (s)");
@@ -998,6 +999,11 @@ haxe_Http.prototype = {
 	}
 	,__class__: haxe_Http
 };
+var haxe_Log = function() { };
+haxe_Log.__name__ = true;
+haxe_Log.trace = function(v,infos) {
+	js_Boot.__trace(v,infos);
+};
 var haxe_Timer = function() { };
 haxe_Timer.__name__ = true;
 haxe_Timer.stamp = function() {
@@ -1167,6 +1173,24 @@ js__$Boot_HaxeError.prototype = $extend(Error.prototype,{
 });
 var js_Boot = function() { };
 js_Boot.__name__ = true;
+js_Boot.__unhtml = function(s) {
+	return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+};
+js_Boot.__trace = function(v,i) {
+	var msg = i != null?i.fileName + ":" + i.lineNumber + ": ":"";
+	msg += js_Boot.__string_rec(v,"");
+	if(i != null && i.customParams != null) {
+		var _g = 0;
+		var _g1 = i.customParams;
+		while(_g < _g1.length) {
+			var v1 = _g1[_g];
+			++_g;
+			msg += "," + js_Boot.__string_rec(v1,"");
+		}
+	}
+	var d;
+	if(typeof(document) != "undefined" && (d = document.getElementById("haxe:trace")) != null) d.innerHTML += js_Boot.__unhtml(msg) + "<br/>"; else if(typeof console != "undefined" && console.log != null) console.log(msg);
+};
 js_Boot.getClass = function(o) {
 	if((o instanceof Array) && o.__enum__ == null) return Array; else {
 		var cl = o.__class__;
@@ -2626,11 +2650,12 @@ objects_globe_Globe.prototype = $extend(THREE.Object3D.prototype,{
 	}
 	,setParticleFlowOverlay: function(sequence,parameters,landMask) {
 		if(landMask == null) landMask = false;
-		if(this.particleFlowMap == null) this.particleFlowMap = new objects_globe_ParticleFlowMap(this.renderer,null,parameters); else throw new js__$Boot_HaxeError("runtime parameter update hasn't been implemented yet");
+		if(this.particleFlowMap == null) this.particleFlowMap = new objects_globe_ParticleFlowMap(this.renderer,null,parameters); else if(parameters != null) this.particleFlowMap.setParameters(parameters);
 		this.particleFlowMap.set_sequence(sequence);
 		this.particleOverlayMaterial.map = this.particleFlowMap.readTarget;
 		this.particleOverlayMaterial.visible = sequence != null;
 		this.particleOverlayMaterial.alphaMap = landMask?this.specTex:null;
+		this.particleOverlayMaterial.needsUpdate = true;
 	}
 	,geoToWorld: function(c,v) {
 		var local = this.geoToLocal(c,v);
@@ -3181,20 +3206,29 @@ objects_globe_GradientMap.prototype = $extend(render_ShaderPass.prototype,{
 	}
 	,__class__: objects_globe_GradientMap
 });
-var objects_globe_MapSequence = function(dirUrl,onReady,parameters) {
+var objects_globe_MapSequence = function(dirUrl,parameters) {
 	var _g = this;
 	if(parameters == null) parameters = { };
 	this.dirUrl = dirUrl;
 	this.parameters = parameters;
+	this.ready = false;
 	this.pathArray = [];
 	this.timeArray = [];
 	this.textureArray = [];
+	this.onReadyCallbacks = [];
 	this.textureRequestsArray = [];
 	this.textureReadyCallbacks = [];
 	var req = new haxe_Http(haxe_io_Path.join([dirUrl,objects_globe_MapSequence.infoFilename]));
 	req.onData = function(content) {
 		_g.setup(JSON.parse(content));
-		if(onReady != null) onReady(_g);
+		_g.ready = true;
+		var _g1 = 0;
+		var _g2 = _g.onReadyCallbacks;
+		while(_g1 < _g2.length) {
+			var cb = _g2[_g1];
+			++_g1;
+			cb(_g);
+		}
 	};
 	req.request(false);
 };
@@ -3215,9 +3249,40 @@ objects_globe_MapSequence.prototype = {
 			this.textureReadyCallbacks[i] = [];
 		}
 	}
-	,requestTexture: function(i,onReady) {
+	,onReady: function(callback) {
+		if(this.ready) callback(this); else this.onReadyCallbacks.push(callback);
+	}
+	,removeCallback: function(callback) {
+		var match = false;
+		var i = this.onReadyCallbacks.length - 1;
+		while(i >= 0) {
+			if(this.onReadyCallbacks[i] == callback) {
+				this.onReadyCallbacks.splice(i,1);
+				match = true;
+			}
+			i--;
+		}
+		if(match) return true;
+		var _g = 0;
+		var _g1 = this.textureReadyCallbacks;
+		while(_g < _g1.length) {
+			var textureCallbacks = _g1[_g];
+			++_g;
+			var i1 = textureCallbacks.length - 1;
+			while(i1 >= 0) {
+				if(textureCallbacks[i1] == callback) {
+					textureCallbacks.splice(i1,1);
+					match = true;
+				}
+				i1--;
+			}
+		}
+		if(match) return true;
+		return false;
+	}
+	,requestTexture: function(i,onTextureReady) {
 		var tex = this.textureArray[i];
-		if(tex == null) this.loadTexture(i,onReady); else if(onReady != null) onReady(tex);
+		if(tex == null) this.loadTexture(i,onTextureReady); else if(onTextureReady != null) onTextureReady(tex);
 	}
 	,nearestIndices: function(u) {
 		var _g = this;
@@ -3444,6 +3509,11 @@ objects_globe_ParticleFlowMap.prototype = $extend(render_ShaderPass2Phase.protot
 		this.readTarget = this.writeTarget;
 		this.writeTarget = tmp;
 	}
+	,setParameters: function(parameters) {
+		if(parameters.decayHalfLife != null) this.processLastFrame.uniforms.halfLife.value = parameters.decayHalfLife;
+		this.particles.setParameters(parameters);
+		this.particleRenderObject.setParameters(parameters);
+	}
 	,get_sequence: function() {
 		return this.particles.sequence;
 	}
@@ -3503,6 +3573,10 @@ objects_globe__$ParticleFlowMap_ParticleRenderObject.prototype = $extend(THREE.O
 		state.setBlending(THREE.AdditiveBlending);
 		gl.drawArrays(0,0,this.particles.count);
 	}
+	,setParameters: function(parameters) {
+		if(parameters.particleOpacity != null) this.material.uniforms.particleOpacity.value = parameters.particleOpacity;
+		if(parameters.particleSize != null) this.material.uniforms.particleSize.value = parameters.particleSize;
+	}
 	,__class__: objects_globe__$ParticleFlowMap_ParticleRenderObject
 });
 var objects_globe__$ParticleFlowMap_ParticleSimulation = function(renderer,sequence,parameters) {
@@ -3511,7 +3585,7 @@ var objects_globe__$ParticleFlowMap_ParticleSimulation = function(renderer,seque
 	if(countPOT % 2 != 0) countPOT--;
 	this.count = 1 << countPOT;
 	this.textureSize = 1 << (countPOT * .5 | 0);
-	console.log("setting up particles, count: " + this.count + ", texture size: " + this.textureSize + " x " + this.textureSize);
+	haxe_Log.trace("setting up particles, count: " + this.count + ", texture size: " + this.textureSize + " x " + this.textureSize,{ fileName : "ParticleFlowMap.hx", lineNumber : 330, className : "objects.globe._ParticleFlowMap.ParticleSimulation", methodName : "new"});
 	render_ShaderPass2Phase.call(this,renderer,this.textureSize,this.textureSize,{ format : THREE.RGBAFormat, type : THREE.UnsignedByteType, wrapS : THREE.ClampToEdgeWrapping, wrapT : THREE.ClampToEdgeWrapping, minFilter : THREE.NearestFilter, magFilter : THREE.NearestFilter, anisotropy : 1, depthBuffer : false, stencilBuffer : false});
 	this.initialConditionsMaterial = new THREE.ShaderMaterial({ vertexShader : shaderlib_Vertex.basic_uv, fragmentShader : objects_globe__$ParticleFlowMap_ParticleSimulation.initialConditionsFragment});
 	this.positionStepMaterial = new THREE.ShaderMaterial({ vertexShader : shaderlib_Vertex.basic_uv, fragmentShader : objects_globe__$ParticleFlowMap_ParticleSimulation.positionStepFragment, uniforms : { particlePositions : { type : "t", value : null}, velocities0 : { type : "t", value : null}, velocities1 : { type : "t", value : null}, frameMix : { type : "f", value : 0}, dt_s : { type : "f", value : 0.0166666666666666664}, randomSeed : { type : "f", value : 1.0}}});
@@ -3532,6 +3606,13 @@ objects_globe__$ParticleFlowMap_ParticleSimulation.prototype = $extend(render_Sh
 			this.quad.material = this.positionStepMaterial;
 			this.render();
 		}
+	}
+	,setParameters: function(parameters) {
+		if(parameters.countPowerOf2 != null) {
+			if(1 << parameters.countPowerOf2 != this.count) throw new js__$Boot_HaxeError("changing particle count is not yet supported");
+		}
+		if(parameters.particleLifetime != null) this.positionStepMaterial.uniforms.meanLifetime.value = parameters.particleLifetime;
+		if(parameters.velocityScale != null) this.positionStepMaterial.uniforms.velocityScale.value = parameters.velocityScale;
 	}
 	,set_sequence: function(seq) {
 		var _g = this;
@@ -3696,8 +3777,8 @@ tracks_Track.create = function(name,state) {
 		return new tracks_AnimalOdysseys(state);
 	case "recordoverlays":
 		return new tracks_RecordOverlays(state);
-	case "seeaseason":
-		return new tracks_SeeASeason(state);
+	case "weatherglobe":
+		return new tracks_WeatherGlobe(state);
 	case "yasi":
 		return new tracks_Yasi(state);
 	default:
@@ -3908,7 +3989,7 @@ tracks_AnimalOdysseys.prototype = $extend(tracks_Track.prototype,{
 		this.state.sunSpringEnabled = true;
 	}
 	,cleanup: function() {
-		console.log("cleaning up AnimalOdysseys");
+		haxe_Log.trace("cleaning up AnimalOdysseys",{ fileName : "AnimalOdysseys.hx", lineNumber : 84, className : "tracks.AnimalOdysseys", methodName : "cleanup"});
 		var _g = 0;
 		var _g1 = [this.dwarfMinkGroup,this.greenTurtleGroup,this.shearwaterGroup];
 		while(_g < _g1.length) {
@@ -4452,15 +4533,20 @@ tracks_RecordOverlays.prototype = $extend(tracks_Track.prototype,{
 	}
 	,__class__: tracks_RecordOverlays
 });
-var tracks_SeeASeason = function(state) {
+var tracks_WeatherGlobe = function(state) {
 	tracks_Track.call(this,state);
+	var sequenceParams = { overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter};
+	this.currents = new objects_globe_MapSequence("" + state.assetRoot + "/climate-data/demo/currents",sequenceParams);
+	this.wind = new objects_globe_MapSequence("" + state.assetRoot + "/climate-data/demo/wind",sequenceParams);
+	this.sst = new objects_globe_MapSequence("" + state.assetRoot + "/climate-data/demo/sst",sequenceParams);
+	this.sstAnomaly = new objects_globe_MapSequence("" + state.assetRoot + "/climate-data/demo/sst-anomaly",sequenceParams);
 	this.initialState();
-	this.chapters = [{ init : $bind(this,this.chapter0Init), cleanup : $bind(this,this.chapter0Cleanup)},{ init : $bind(this,this.chapter1Init), cleanup : $bind(this,this.chapter1Cleanup)},{ init : $bind(this,this.chapter2Init), cleanup : $bind(this,this.chapter2Cleanup)}];
-	this.chapterCount = 3;
+	this.chapters = [{ init : $bind(this,this.chapter0Init), cleanup : $bind(this,this.chapter0Cleanup)},{ init : $bind(this,this.chapter1Init), cleanup : $bind(this,this.chapter1Cleanup)},{ init : $bind(this,this.chapter2Init), cleanup : $bind(this,this.chapter2Cleanup)},{ init : $bind(this,this.chapter3Init), cleanup : $bind(this,this.chapter3Cleanup)}];
+	this.chapterCount = 4;
 };
-tracks_SeeASeason.__name__ = true;
-tracks_SeeASeason.__super__ = tracks_Track;
-tracks_SeeASeason.prototype = $extend(tracks_Track.prototype,{
+tracks_WeatherGlobe.__name__ = true;
+tracks_WeatherGlobe.__super__ = tracks_Track;
+tracks_WeatherGlobe.prototype = $extend(tracks_Track.prototype,{
 	initialState: function() {
 		this.state.sunSpringEnabled = true;
 		this.state.globe.vectorOverlayMaterial.visible = true;
@@ -4469,43 +4555,62 @@ tracks_SeeASeason.prototype = $extend(tracks_Track.prototype,{
 	,cleanup: function() {
 	}
 	,chapter0Init: function() {
-		var _g = this;
-		if(this.sequence == null) this.sequence = new objects_globe_MapSequence("" + this.state.assetRoot + "/climate-data/demo/currents",function(s) {
-			_g.state.globe.setGradientOverlay(s,null,null,"blueWhite(pow(x, 0.5))",true);
-			_g.state.globe.setParticleFlowOverlay(s,{ decayHalfLife : 0.44, particleOpacity : 0.28, particleSize : 2, particleLifetime : 6.7, velocityScale : 0.06},true);
-			_g.state.globe.gradientOverlayMaterial.opacity = 0.3;
-			_g.state.globe.particleOverlayMaterial.opacity = 0.7;
-			Debug.addOverlaySettings(_g.state.globe.particleFlowMap);
-		},{ overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter});
+		this.currents.onReady($bind(this,this.chapter0SequenceReady));
+	}
+	,chapter0SequenceReady: function(s) {
+		this.state.globe.setGradientOverlay(s,null,null,"blueWhite(pow(x, .5))",true);
+		this.state.globe.setParticleFlowOverlay(s,{ decayHalfLife : 0.44, particleOpacity : 0.28, particleSize : 2, particleLifetime : 6.7, velocityScale : 0.06},true);
+		this.state.globe.gradientOverlayMaterial.opacity = 0.3;
+		this.state.globe.particleOverlayMaterial.opacity = 0.7;
+		Debug.addOverlaySettings(this.state.globe.particleFlowMap);
 	}
 	,chapter0Cleanup: function() {
+		this.currents.removeCallback($bind(this,this.chapter0SequenceReady));
+		this.state.globe.setGradientOverlay(null);
+		this.state.globe.setParticleFlowOverlay(null);
 	}
 	,chapter1Init: function() {
-		var _g = this;
-		if(this.sequence == null) this.sequence = new objects_globe_MapSequence("" + this.state.assetRoot + "/climate-data/demo/wind",function(s) {
-			_g.state.globe.setGradientOverlay(s,null,null,"blueWhite(x/40.)",false);
-			_g.state.globe.setParticleFlowOverlay(s,{ decayHalfLife : 0.44, particleOpacity : 0.24, particleSize : 2, particleLifetime : 2.1, velocityScale : 0.0017},false);
-			_g.state.globe.gradientOverlayMaterial.opacity = 0.6;
-			_g.state.globe.particleOverlayMaterial.opacity = 0.81;
-			Debug.addOverlaySettings(_g.state.globe.particleFlowMap);
-		},{ overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter});
+		this.wind.onReady($bind(this,this.chapter1SequenceReady));
+	}
+	,chapter1SequenceReady: function(s) {
+		this.state.globe.setGradientOverlay(s,null,null,"blueWhite(pow(x/50.0, .5))",true);
+		this.state.globe.setParticleFlowOverlay(s,{ decayHalfLife : 0.44, particleOpacity : 0.24, particleSize : 2, particleLifetime : 2.1, velocityScale : 0.0017},false);
+		this.state.globe.gradientOverlayMaterial.opacity = 0.6;
+		this.state.globe.particleOverlayMaterial.opacity = 0.81;
+		Debug.addOverlaySettings(this.state.globe.particleFlowMap);
 	}
 	,chapter1Cleanup: function() {
+		this.wind.removeCallback($bind(this,this.chapter1SequenceReady));
+		this.state.globe.setGradientOverlay(null);
+		this.state.globe.setParticleFlowOverlay(null);
 	}
 	,chapter2Init: function() {
-		var _g = this;
-		if(this.sequence == null) this.sequence = new objects_globe_MapSequence("" + this.state.assetRoot + "/climate-data/demo/sst",function(s) {
-			_g.state.globe.setGradientOverlay(s,null,null,"temperatureHue(pow(x, .5))",true);
-			_g.state.globe.gradientOverlayMaterial.opacity = 0.8;
-		},{ overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter});
+		this.sst.onReady($bind(this,this.chapter2SequenceReady));
+	}
+	,chapter2SequenceReady: function(s) {
+		this.state.globe.setGradientOverlay(s,null,null,"temperatureHue(pow(x, .5))",true);
+		this.state.globe.gradientOverlayMaterial.opacity = 0.8;
 	}
 	,chapter2Cleanup: function() {
+		this.sst.removeCallback($bind(this,this.chapter2SequenceReady));
+		this.state.globe.setGradientOverlay(null);
 	}
-	,__class__: tracks_SeeASeason
+	,chapter3Init: function() {
+		this.sstAnomaly.onReady($bind(this,this.chapter3SequenceReady));
+	}
+	,chapter3SequenceReady: function(s) {
+		this.state.globe.setGradientOverlay(s,null,null,"(x = (x + OFFSET)/INV_SCALE, x = x*2.0 - 1.0, x = pow(x*8., 1.5) - 3.9, temperatureHue(clamp(x, 0., 1.)))",true);
+		this.state.globe.gradientOverlayMaterial.opacity = 0.8;
+	}
+	,chapter3Cleanup: function() {
+		this.sstAnomaly.removeCallback($bind(this,this.chapter3SequenceReady));
+		this.state.globe.setGradientOverlay(null);
+	}
+	,__class__: tracks_WeatherGlobe
 });
 var tracks_Yasi = function(state) {
 	tracks_Track.call(this,state);
-	console.log("setting up Yasi");
+	haxe_Log.trace("setting up Yasi",{ fileName : "Yasi.hx", lineNumber : 18, className : "tracks.Yasi", methodName : "new"});
 	this.g = state.globe;
 	var geoCoords = [[-174.20041578595533,-12.513848396361265,0],[-176.7011343398897,-12.945599910277297,0],[179.17687102384582,-13.766161116383206,0],[175.7822060088731,-14.642631441828902,0],[169.6189003889049,-13.622312227823304,0],[164.55339913004946,-13.16020955331978,0],[157.4039707279596,-13.761494926195361,0],[151.14096307191258,-15.975071096165696,0],[144.01068716307313,-18.75255713371913,0],[138.89250941547778,-21.181690864029925,0],[135.43490041123601,-24.53698136671599,0]];
 	var x = 0;
@@ -4535,6 +4640,8 @@ var tracks_Yasi = function(state) {
 	tmp = _g2;
 	var pathVerticies = tmp;
 	this.testPath = new THREE.SplineCurve3(pathVerticies);
+	var sequenceParams = { overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter};
+	this.windSequence = new objects_globe_MapSequence("" + state.assetRoot + "/climate-data/yasi-110m-highres-pack",sequenceParams);
 	this.chapters = [{ init : $bind(this,this.chapter0Init), cleanup : $bind(this,this.chapter0Cleanup)}];
 	this.chapterCount = 1;
 };
@@ -4547,22 +4654,40 @@ tracks_Yasi.prototype = $extend(tracks_Track.prototype,{
 		if(this.windSequence != null) this.windSequence.dispose();
 	}
 	,update: function(dt_ms) {
+		if(this.state.controls.enabled) return;
+		var progress = 0;
+		if(this.g.particleFlowMap != null) {
+			if(this.g.particleFlowMap.get_sequence() != null) progress = this.g.particleFlowMap.get_sequenceView().progress;
+		}
+		var tmp;
+		var x = progress;
+		if(x < 0) x = 0;
+		if(x > 1) x = 1;
+		tmp = x;
+		progress = tmp;
+		var p = this.testPath.getPoint(progress);
+		this.state.camera.setTargetVector(p,0);
 	}
 	,chapter0Init: function() {
-		var _g = this;
-		console.log("Yasi chapter 0");
-		console.log("loading wind flow data");
+		haxe_Log.trace("Yasi chapter 0",{ fileName : "Yasi.hx", lineNumber : 106, className : "tracks.Yasi", methodName : "chapter0Init"});
+		haxe_Log.trace("loading wind flow data",{ fileName : "Yasi.hx", lineNumber : 107, className : "tracks.Yasi", methodName : "chapter0Init"});
+		this.state.controls.enabled = false;
+		var _this = this.state.globe;
+		_this.sun.position.set(Math.cos(135) * _this.sunDistance,0,-Math.sin(135) * _this.sunDistance);
 		this.g.vectorOverlayMaterial.visible = true;
 		this.g.vectorOverlayMaterial.opacity = 0.5;
-		if(this.windSequence == null) this.windSequence = new objects_globe_MapSequence("" + this.state.assetRoot + "/climate-data/oscar-vel-pack",function(s) {
-			_g.g.setGradientOverlay(s,null,null,"blueWhite(pow(x, 0.5))",true);
-			_g.g.setParticleFlowOverlay(s,{ decayHalfLife : 0.44, particleOpacity : 0.28, particleSize : 2, particleLifetime : 6.7, velocityScale : 0.06},true);
-			_g.g.gradientOverlayMaterial.opacity = 0.3;
-			_g.g.particleOverlayMaterial.opacity = 0.7;
-		},{ overrideMinFiltering : THREE.LinearFilter, overrideMagFiltering : THREE.LinearFilter});
+		haxe_Log.trace("windSequence.ready",{ fileName : "Yasi.hx", lineNumber : 117, className : "tracks.Yasi", methodName : "chapter0Init", customParams : [this.windSequence.ready]});
+		this.windSequence.onReady($bind(this,this.chapter0SequenceReady));
+	}
+	,chapter0SequenceReady: function(s) {
+		this.g.setGradientOverlay(s,null,null,"blueWhite(pow(x/50.0, .5))",false);
+		this.g.setParticleFlowOverlay(s,{ countPowerOf2 : 18, decayHalfLife : 0.2, particleOpacity : 0.3, particleSize : 2.0, particleLifetime : 5.3, velocityScale : 0.0018},false);
+		this.g.gradientOverlayMaterial.opacity = 0.7;
+		this.g.particleOverlayMaterial.opacity = 0.7;
 	}
 	,chapter0Cleanup: function() {
-		console.log("Yasi cleanup 0");
+		haxe_Log.trace("Yasi cleanup 0",{ fileName : "Yasi.hx", lineNumber : 135, className : "tracks.Yasi", methodName : "chapter0Cleanup"});
+		this.windSequence.removeCallback($bind(this,this.chapter0SequenceReady));
 	}
 	,__class__: tracks_Yasi
 });
@@ -4661,8 +4786,8 @@ objects_globe_GradientMap.fragmentShaderStr = "\n\tuniform sampler2D frame0;\n\t
 objects_globe_GradientMap.defaultColorFn = "blueWhite(x)";
 objects_globe_MapSequence.infoFilename = "sequence-info.json";
 objects_globe_ParticleFlowMap.processLastFrameFragment = "#define DEBUG" + "\nuniform sampler2D lastFrame;\nuniform float dt_s;\nvarying vec2 vUv;\n\n#ifdef DEBUG\nuniform float halfLife;\n#endif\n\nconst float ln2 = 0.69314718056;\n\nvoid main(){\n\tvec4 l = texture2D(lastFrame, vUv);\n\n\t// ln2 / halfLife = lambda\n\n\tl = l - l * (ln2 / halfLife) * dt_s;\n\n\tgl_FragColor = l;\n}\n";
-objects_globe__$ParticleFlowMap_ParticleRenderObject.vertexShaderStr = "#define DEBUG" + ("\nprecision highp float;\n\nattribute vec2 lookUpUV;\nuniform sampler2D positions;\n\n#ifdef DEBUG\nuniform float particleSize;\n#endif\n\n" + shaderlib_Chunks.float_packing + "\n" + "//Depends on:\n//\tShaderLib.Chunks.float_packing\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n" + "\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(positions, lookUpUV));\n\n\tgl_PointSize = particleSize;\n\n\tgl_Position = vec4(p*2.0 - 1.0, 0., 1.0);\n}\n");
-objects_globe__$ParticleFlowMap_ParticleRenderObject.fragmentShaderStr = "#define DEBUG" + "\nprecision highp float;\n\n#ifdef DEBUG\nuniform float particleOpacity;\n#endif\n\nvoid main(){\n\tgl_FragColor = vec4(1.0, 1.0, 1.0, particleOpacity);\n}\n";
+objects_globe__$ParticleFlowMap_ParticleRenderObject.vertexShaderStr = "#define DEBUG" + ("\nprecision highp float;\n\nattribute vec2 lookUpUV;\nuniform sampler2D positions;\n\nuniform float particleSize;\n\n" + shaderlib_Chunks.float_packing + "\n" + "//Depends on:\n//\tShaderLib.Chunks.float_packing\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n" + "\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(positions, lookUpUV));\n\n\tgl_PointSize = particleSize;\n\n\tgl_Position = vec4(p*2.0 - 1.0, 0., 1.0);\n}\n");
+objects_globe__$ParticleFlowMap_ParticleRenderObject.fragmentShaderStr = "#define DEBUG" + "\nprecision highp float;\n\nuniform float particleOpacity;\n\nvoid main(){\n\tgl_FragColor = vec4(1.0, 1.0, 1.0, particleOpacity);\n}\n";
 objects_globe__$ParticleFlowMap_ParticleRenderObject.dummyCamera = new THREE.Camera();
 objects_globe__$ParticleFlowMap_ParticleSimulation.initialConditionsFragment = "\nvarying vec2 vUv;\n\n" + shaderlib_Chunks.float_packing + "\n" + "//Depends on:\n//\tShaderLib.Chunks.float_packing\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n" + "\n\nvoid main(){\n\tvec2 p = vUv;\n\tgl_FragColor = packParticlePosition(p);\n}\n";
 objects_globe__$ParticleFlowMap_ParticleSimulation.positionStepFragment = "#define DEBUG" + ("\nvarying vec2 vUv;\n\nuniform sampler2D velocities0;\nuniform sampler2D velocities1;\nuniform float frameMix;\n\nuniform sampler2D particlePositions;\nuniform float dt_s;\nuniform float randomSeed;\n\n#ifdef DEBUG\nuniform float meanLifetime; //how long a particle is expected to last before reset (very loose approx)\nuniform float velocityScale;\n#endif\n\n" + shaderlib_Chunks.rand + "\n" + shaderlib_Chunks.float_packing + "\n" + "//Depends on:\n//\tShaderLib.Chunks.float_packing\n\n//position\n#ifndef NO_PARTICLE_PACK\nvec4 packParticlePosition(in vec2 p){\n\tvec2 np = p*0.5 + 0.5;\n\treturn vec4(packFloat8bitRG(np.x), packFloat8bitRG(np.y));\n}\n#else\n#define packParticlePosition(p) vec4(p.xy, 0., 0.)\n#endif\n\n#ifndef NO_PARTICLE_PACK\nvec2 unpackParticlePosition(in vec4 pp){\n\tvec2 np = vec2(unpackFloat8bitRG(pp.xy), unpackFloat8bitRG(pp.zw));\n\treturn 2.0*np.xy - 1.0;\n}\n#else\n#define unpackParticlePosition(pp) pp.xy\n#endif\n" + "\n" + "//Depends on:\n//\tShaderLib.Chunks.float_packing\n//Requires defines:\n//\tOFFSET, INV_SCALE\n\nvec2 unpack1_2(vec4 pack){\n\tvec2 u = vec2(unpackFloat8bitRG(pack.rg), unpackFloat8bitRG(pack.ba));\n\tconst vec2 offset = vec2(OFFSET);\n\tu = (u * INV_SCALE) - offset;\n\treturn u;\n}\n\nvec2 read1_2(sampler2D tex, vec2 uv){\n\treturn unpack1_2(texture2D(tex, uv));\n}" + "\n\nvec2 cartesianToAngularVelocity(in vec2 cv){\n\t//@! todo\n\treturn cv;\n}\n\nvoid main(){\n\tvec2 p = unpackParticlePosition(texture2D(particlePositions, vUv));\n\n\t//read velocity data\n\tvec2 v = mix(\n\t\tREAD_VALUE_FN(velocities0, p),\n\t\tREAD_VALUE_FN(velocities1, p),\n\t\tframeMix\n\t);\n\n\tv = cartesianToAngularVelocity(v) * velocityScale;\n\n\t//euler step\n\tp = p + v * dt_s;\n\n\t//reset position\n\t#ifndef DEBUG\n\tconst\n\t#endif\n\tfloat resetFactor = 1./meanLifetime; \n\n\tif((resetFactor * dt_s) > rand(p + vUv + randomSeed)){\n\t\tp = vUv;\n\t}\n\n\t//wrap positions\n\tp = mod(p, 1.0);\n\n\tgl_FragColor = packParticlePosition(p);\n}\n");

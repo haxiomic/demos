@@ -20,8 +20,9 @@
 		//pseudo host
 		var globeContainer = document.querySelector('#globe-container');
 		var globe = new Globe(globeContainer);
-		globe.setTrack('SeeASeason');
+		globe.setTrack('WeatherGlobe');
 		
+		//chapter parameter
 		function getParameterByName(name) {
 		    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
 		    var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
@@ -32,6 +33,7 @@
 		var c = parseInt(getParameterByName('c'));
 		if(!isNaN(c)){
 			globe.setChapter(c);
+		}else{
 		}
 		</script>
 	</body>
