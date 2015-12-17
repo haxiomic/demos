@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>WebGL Globe</title>
+		<link rel="stylesheet" type="text/css" href="css/app.css">
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	</head>
+	<body>
+		<div id="globe-container">
+			
+		</div>
+
+		<!-- Libs -->
+		<script type="text/javascript" src="lib/three-r71/three.js"></script>
+		<script type="text/javascript" src="lib/three-r71/extras/controls/OrbitControls.js"></script>
+
+		<!-- App -->
+		<script type="text/javascript" src="js/webgl-globe.js"></script>
+
+		<script type="text/javascript">
+		//pseudo host
+		var globeContainer = document.querySelector('#globe-container');
+		var globe = new Globe(globeContainer);
+		globe.setTrack('WeatherGlobe');
+		
+		//chapter parameter
+		function getParameterByName(name) {
+		    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+		    var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+		        results = regex.exec(location.search);
+		    return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+		}
+
+		var c = parseInt(getParameterByName('c'));
+		if(!isNaN(c)){
+			globe.setChapter(c);
+		}else{
+			globe.setChapter(0);
+		}
+		</script>
+	</body>
+</html>
