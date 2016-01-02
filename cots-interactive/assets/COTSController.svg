@@ -1,0 +1,73 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 width="402px" height="283.88px" viewBox="0 0 402 283.88" enable-background="new 0 0 402 283.88" xml:space="preserve">
+
+	 <defs>
+	  <filter height="200%" width="200%" y="-50%" x="-50%" id="svg_38_blur">
+	   <feGaussianBlur stdDeviation="6.8" in="SourceGraphic"/>
+	  </filter>
+	  <filter height="200%" width="200%" y="-50%" x="-50%" id="svg_39_blur">
+	   <feGaussianBlur stdDeviation="4.5" in="SourceGraphic"/>
+	  </filter>
+	  <filter height="200%" width="200%" y="-50%" x="-50%" id="svg_40_blur">
+	   <feGaussianBlur stdDeviation="2.8" in="SourceGraphic"/>
+	  </filter>
+	 </defs>
+
+ <polygon fill="rgba(7, 30, 43, 0.3)" stroke="#A8D9E5" stroke-width="2" stroke-miterlimit="10" points="3.14,3.64 3.14,281.27 398.53,281.27 
+	 	398.53,22.47 379.69,3.64 "/>
+
+<g>
+	<text transform="matrix(1 0 0 1 31.5517 151.2693)" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="30">Nitrate run-off from agriculture</text>
+	<text transform="matrix(1 0 0 1 54.7986 33.5153)"><tspan x="0" y="0" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Algae</tspan><tspan x="-1.5" y="18" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Bloom</tspan></text>
+	<text transform="matrix(1 0 0 1 147.01 33.5153)"><tspan x="0" y="0" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Crown Of Thorns</tspan><tspan x="2.27" y="18" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Starfish Larvae</tspan></text>
+	<text transform="matrix(1 0 0 1 279.7945 33.5153)"><tspan x="0" y="0" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Adult Crown Of</tspan><tspan x="-2.74" y="18" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">Thorns Starfish</tspan></text>
+
+
+	<ellipse ry="6.5" rx="6.5" id="svg_31" cy="86.69" cx="180.75001" stroke-width="0" stroke="#000" fill="#00aeff"/>
+	<ellipse stroke="#000" ry="9.624998" rx="9.624998" id="svg_32" cy="71.315013" cx="201.875001" stroke-width="0" fill="#00aeff"/>
+	<ellipse stroke="#000" ry="8" rx="8" id="svg_33" cy="90.689998" cx="220.249981" stroke-width="0" fill="#00aeff"/>
+	<ellipse stroke="#000" ry="20.999987" rx="20.999987" id="svg_34" cy="82.190004" cx="311.24992" stroke-width="0" fill="#86003b"/>
+	<ellipse stroke="#000" ry="15.749991" rx="15.749991" id="svg_35" cy="90.439999" cx="339.249896" stroke-width="0" fill="#77294e"/>
+
+	<path filter="url(#svg_38_blur)" id="svg_38" d="m87.500084,66.749954l-35.500122,6.499992c-13.999855,-5 -20.249836,-0.75 -8.249844,18.499985c11.999989,19.249985 44.999966,7.749992 44.999813,7.499992c0.000153,0.25 23.000145,-3.999985 16.249992,-19.249985" stroke-opacity="null" stroke-width="0" stroke="#000" fill="#21894d"/>
+	<path stroke="#000" opacity="0.71" filter="url(#svg_39_blur)" id="svg_39" d="m81.258324,77.749947l-19.382767,3.548935c-7.643806,-2.72995 -11.05624,-0.409485 -4.504349,10.100845c6.551899,10.510323 24.569603,4.23143 24.569527,4.094925c0.000076,0.136505 12.557884,-2.183952 8.872353,-10.510323" stroke-opacity="null" stroke-width="0" fill="#46b14a"/>
+	<path filter="url(#svg_40_blur)" stroke="#000" opacity="0.22" id="svg_40" d="m78.658684,82.749939l-11.520645,2.109406c-4.543293,-1.62262 -6.57156,-0.243393 -2.677277,6.003693c3.894295,6.247086 14.603577,2.51506 14.603531,2.433929c0.000046,0.081131 7.464096,-1.298096 5.273506,-6.247078" stroke-opacity="null" stroke-width="0" fill="#a8d67e"/>
+</g>
+
+<line fill="none" stroke="#A8D9E5" stroke-width="2" stroke-miterlimit="10" x1="132.21" y1="114.47" x2="13.59" y2="114.47"/>
+<line fill="none" stroke="#A8D9E5" stroke-miterlimit="10" x1="388.21" y1="222.27" x2="13.59" y2="222.27"/>
+<line fill="none" stroke="#A8D9E5" stroke-width="2" stroke-miterlimit="10" x1="260.21" y1="114.47" x2="141.59" y2="114.47"/>
+<line fill="none" stroke="#A8D9E5" stroke-width="2" stroke-miterlimit="10" x1="388.21" y1="114.47" x2="269.6" y2="114.47"/>
+
+<g>
+	<g id="nitrate-bar" transform="translate(65,181)">
+		<path fill="none" stroke="#FFFFFF" stroke-width="2" stroke-miterlimit="10" d="m271.53,5.78999c0,2.44 -1.98001,4.42 -4.41998,4.42l-261.69002,0c-2.44,0 -4.42,-1.98 -4.42,-4.42l0,-0.37c0,-2.44 1.98,-4.42 4.42,-4.42l261.68999,0c2.44,0 4.42001,1.98 4.42001,4.42l0,0.37z"/>
+	</g>
+	<g>
+		<rect x="346.8" y="184.64" fill="#FFFFFF" width="15.59" height="3.27"/>
+		<rect x="352.96" y="178.47" fill="#FFFFFF" width="3.27" height="15.59"/>
+	</g>
+	<rect x="37.03" y="184.64" fill="#FFFFFF" width="15.59" height="3.27"/>
+</g>
+
+<g id="nitrate-handle" transform="translate(65,186.275)">
+	<ellipse ry="30" rx="30"  fill="#FFFFFF"/>
+	<text transform="translate(0,0)" font-family="'bebas_neuebold'" font-size="18" text-anchor="middle" alignment-baseline="middle"></text>
+</g>
+
+<g>
+	<g id="oneWeek" class="timeBtn active"> 
+		<rect class="timeBtn-bg" x="13.59" y="235.27" fill="#071e2b" stroke="#A8D9E5" stroke-miterlimit="10" width="118.62" height="34.34"/>
+		<text class="timeBtn-text" transform="matrix(1 0 0 1 26.2333 259.0713)" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">1 week = 1 sec</text>
+	</g>
+	<g id="twoWeeks" class="timeBtn">
+		<rect class="timeBtn-bg" x="141.59" y="235.27" fill="#071e2b" stroke="#A8D9E5" stroke-miterlimit="10" width="118.62" height="34.34"/>
+		<text class="timeBtn-text" transform="matrix(1 0 0 1 150.6467 259.0708)" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">2 weeks = 1 sec</text>
+	</g>
+	<g id="oneMonth" class="timeBtn">
+		<rect class="timeBtn-bg" x="269.6" y="235.27" fill="#071e2b" stroke="#A8D9E5" stroke-miterlimit="10" width="118.62" height="34.34"/>
+		<text class="timeBtn-text" transform="matrix(1 0 0 1 279.7323 259.0713)" fill="#A8D9E5" font-family="'bebas_neuebold'" font-size="18">1 month = 1 sec</text>
+	</g>
+</g>
+
+</svg>

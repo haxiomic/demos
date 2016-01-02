@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>COTS Invasion</title>
+		<link rel="stylesheet" type="text/css" href="css/app.css">
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	</head>
+	<body>
+		<div class="container"></div>
+
+		<div id="COTSControllerSVG">
+		</div>
+
+
+		<!-- Libs -->
+		<script type="text/javascript" src="lib/three-r71/three.js"></script>
+
+		<!-- App -->
+		<script type="text/javascript" src="js/cots-simulation.js"></script>
+		<script type="text/javascript" src="js/cots-interface.js"></script>
+
+		<script type="text/javascript">
+
+			//prevent regular mobile zooming (might want to put this in _head.php)
+			var noZoomMeta = document.createElement('meta');
+			noZoomMeta.setAttribute('name', 'viewport');
+			noZoomMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+			document.head.appendChild(noZoomMeta);
+			//prevent default scrolling
+			document.ontouchmove = function(event){
+			    event.preventDefault();
+			}
+
+			var cotsSimulation = new CotsSimulation(document.querySelector('.container'));
+
+			//interface
+			var svgContainer = document.querySelector('#COTSControllerSVG');
+			//load interface SVG
+			xhr = new XMLHttpRequest();
+			xhr.open("GET","assets/COTSController.svg",true);
+			xhr.overrideMimeType("image/svg+xml");
+			xhr.send("");
+			xhr.onload = function(e){
+				svgContainer.innerHTML = e.target.response;
+				svgContainer.style.width = svgContainer.querySelector('svg').getAttribute('width');
+				
+				var cotsInterface = new COTSInterface(svgContainer, function(state){
+					cotsSimulation.setNitrateAmount(state.nitrateFraction);
+					console.log(state.nitrateFraction);
+					var timeMultiplier;
+					switch(state.timeRange){
+						case 0: timeMultiplier = 0.5; break;
+						case 1: timeMultiplier = 1.0; break;
+						case 2: timeMultiplier = 2.0; break;
+						default: timeMultiplier = 0.5;
+					}
+					cotsSimulation.setTimeMultiplier(timeMultiplier);
+				});
+			}
+		</script>
+	</body>
+</html>
