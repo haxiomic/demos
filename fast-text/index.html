@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>text-perf</title>
+		<meta charset="utf-8">
+		<link rel="stylesheet" type="text/css" href="css/app.css">
+
+		<style type="text/css">
+			body {
+				margin: 0;
+				background: #EFEFEF;
+				overflow-x: hidden;
+				overflow-y: hidden;
+			}
+			.text-node {
+				font-size: 10px;
+				position: absolute;
+				text-rendering: optimizeSpeed;
+				white-space: nowrap;
+				overflow: hidden;
+				will-change: transform;
+				/*background: white;*/ /* surprisingly important in FF */
+				/*outline: 1px solid red;*/
+				font-weight: bold;
+				font-family: 'helvetica';
+				text-align: center;
+				color: #00d5ef;
+				text-shadow: 0px 0px 6px #01d0ff;
+			}
+		</style>
+	</head>
+	<body>
+		<script type="text/javascript">
+			let fontSize = 10;
+
+			// create a bunch of text nodes
+			let textNodes = [];
+			let count = 500;
+			let maxStringLength = 200;
+			let minStringLength = 20;
+			for (let i = 0; i < count; i++) {
+				let node = document.createElement('div');
+				node.classList.add('text-node');
+				// generate random string
+				let stringLength = Math.floor(Math.random() * maxStringLength + 1) + minStringLength;
+				let str = '';
+				let codeStart = 32;
+				let codeEnd = 125;
+				for (let j = 0; j < stringLength; j++) {
+					let charCode = Math.floor(Math.random() * (codeEnd - codeStart)) + codeStart;
+					str += String.fromCharCode(charCode);
+				}
+				node.innerHTML = str;
+				// node.style.width = '300px';
+				// node.style.height = fontSize + 'px';
+
+				textNodes.push(node);
+
+				document.body.appendChild(node);
+			}
+
+			frameLoop();
+
+			function frameLoop() {
+				window.requestAnimationFrame(frameLoop);
+				let t = window.performance.now();
+
+				for (let i = 0; i < textNodes.length; i++) {
+					let node = textNodes[i];
+					let u = t/1000 + i * (Math.cos(t / 4000) * 0.03);
+
+					let x = u * 400 % window.innerWidth;
+					if (i % 2 == 0) {
+						x = window.innerWidth - x;
+					}
+
+					let y = Math.floor(i / 3) * fontSize;
+
+					node.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+					// node.style.left = x + 'px';
+					// node.style.top = y + 'px';
+				}
+			}
+		</script>
+	</body>
+</html>
