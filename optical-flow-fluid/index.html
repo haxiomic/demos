@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
+        <meta charset="utf-8">
+        <style>
+            * {
+                box-sizing: border-box;
+
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
+            body {
+                margin: 0;
+                cursor: pointer;
+                overflow: hidden;
+                position: fixed;
+                width: 100%;
+                height: 100%;;
+            }
+            .app-canvas {
+                display: block;
+                touch-action: none;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="app-canvas"></canvas>
+        <script src="dat.gui.custom.js"></script>
+        <script src="fluid.js"></script>
+        <script>
+            let canvas = document.querySelector('canvas');
+            let pixelScale = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * pixelScale;
+            canvas.height = window.innerHeight * pixelScale;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            // add canvas gl context listeners to encourage powerPreference to be respected
+            canvas.addEventListener('webglcontextlost', (e) => window.location.reload());
+            canvas.addEventListener('webglcontextrestored', (e) => console.log('webglcontextrestored'));
+
+            // disable default touch actions
+            canvas.setAttribute('touch-action', 'none');
+
+            let forceWebGL2 = new URL(window.location.href).searchParams.get('webgl2') != null;
+
+            let gl = canvas.getContext(forceWebGL2 ? 'webgl2' : 'webgl', {
+                antialias: false,
+                stencil: false,
+                depth: false,
+                alpha: false,
+                premultipliedAlpha: false,
+                preserveDrawingBuffer: false,
+
+                powerPreference: 'high-performance',
+                // powerPreference: 'low-power',
+            });
+
+            let fluid = new FluidComponent(gl, gl.drawingBufferWidth, gl.drawingBufferHeight);
+            frame(window.performance.now());
+            function frame(t_ms) {
+                fluid.onFrame(t_ms);
+                window.requestAnimationFrame(frame);
+            }
+
+            // listeners
+
+            window.addEventListener('resize', () => {
+                let w = window.innerWidth * pixelScale;
+                let h = window.innerHeight * pixelScale;
+                canvas.width = w;
+                canvas.height = h;
+                fluid.resize(w, h);
+            });
+
+
+            // prevent native touch-scroll
+            canvas.addEventListener('gesturestart', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+            canvas.addEventListener('gesturechange', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+            canvas.addEventListener('scroll', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            // keyboard events
+            window.addEventListener('keyup', (e) => fluid.onKeyUp(e.keyCode));
+
+            /**
+             * @param {MouseEvent} mouseEvent
+             */
+            function executePointerMethodFromMouseEvent(mouseEvent, pointerMethod) {
+                // trackpad force
+                let force = mouseEvent.force || mouseEvent.webkitForce;
+
+                // convert force to a 0 - 1 range
+                let pressure = force !== undefined ? Math.max((force - 1), 0) : 0.5;
+
+                pointerMethod(
+                    // pointerId
+                    -1, // -1 is chosen for mouse events to avoid any possible conflict with other pointers
+                    // type
+                    0, // mouse-type
+                    // x, y
+                    mouseEvent.x * pixelScale, mouseEvent.y * pixelScale,
+                    // buttonState
+                    mouseEvent.buttons,
+                    // buttonChange
+                    mouseEvent.button,
+                    // pressure
+                    pressure,
+                    // radius
+                    50 * pixelScale,
+                    // rotationAngle
+                    0,
+                    // altitudeAngle
+                    0,
+                    // azimuthAngle
+                    0
+                );
+            }
+
+            /**
+             * @param {TouchEvent} touchEvent
+             */
+            function executePointerMethodFromTouchEvent(touchEvent, pointerMethod, preventDefault) {
+                if (preventDefault === true) {
+                    touchEvent.preventDefault(); 
+                }
+
+                for (let i = 0; i < touchEvent.changedTouches.length; i++) {
+                    let touch = touchEvent.changedTouches[i];
+                    pointerMethod(
+                        // pointerId
+                        touch.identifier,
+                        // type
+                        1, // touch-type
+                        // x, y
+                        touch.clientX * pixelScale, touch.clientY * pixelScale,
+                        // buttonState
+                        1,
+                        // buttonChange
+                        0,
+                        // pressure
+                        touch.force,
+                        // radius
+                        touch.radiusX * pixelScale,
+                        // orientation
+                        touch.rotationAngle,
+                        touch.altitudeAngle,
+                        touch.azimuthAngle
+                    );
+                }
+            }
+
+            let onPointerDown = fluid.onPointerDown.bind(fluid)
+            let onPointerChange = fluid.onPointerChange.bind(fluid)
+            let onPointerUp = fluid.onPointerUp.bind(fluid)
+
+            // interaction listeners
+            canvas.addEventListener('mousedown', (e) => executePointerMethodFromMouseEvent(e, onPointerDown));
+            window.addEventListener('mousemove', (e) => executePointerMethodFromMouseEvent(e, onPointerChange));
+            window.addEventListener('mouseup', (e) => executePointerMethodFromMouseEvent(e, onPointerUp));
+            window.addEventListener('webkitmouseforcechanged', (e) => executePointerMethodFromMouseEvent(e, onPointerChange));
+
+            let useCapture = true;
+            canvas.addEventListener('touchstart', (e) => executePointerMethodFromTouchEvent(e, onPointerDown, true), { capture: useCapture, passive: false });
+            window.addEventListener('touchmove', (e) => executePointerMethodFromTouchEvent(e, onPointerChange, true), { capture: useCapture, passive: false });
+            window.addEventListener('touchforcechange', (e) => executePointerMethodFromTouchEvent(e, onPointerChange, false), { capture: useCapture, passive: true });
+            window.addEventListener('touchend', (e) => executePointerMethodFromTouchEvent(e, onPointerUp, false), {capture: useCapture, passive: true});
+            window.addEventListener('touchcancel', (e) => executePointerMethodFromTouchEvent(e, onPointerUp, false), { capture: useCapture, passive: true });
+        </script>
+    </body>
+</html>
